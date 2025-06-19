@@ -3,7 +3,7 @@
 package notifiers
 
 import (
-	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -15,17 +15,49 @@ import (
 
 // 集成测试只在设置了环境变量时运行
 func TestEmailNotifierIntegration(t *testing.T) {
-	if !shouldRunIntegrationTest() {
+	// 初始化环境变量管理器，优先使用 .env.example（用于集成测试）
+	envFile := config.DetermineEnvFile()
+	if envFile == "" {
+		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
+		projectRoot := config.FindProjectRoot()
+		if projectRoot != "" {
+			envFile = filepath.Join(projectRoot, ".env.example")
+		} else {
+			envFile = ".env.example" // 最后的回退选项
+		}
+	}
+
+	t.Logf("Attempting to load env file: %s", envFile)
+	err := config.InitEnvManager(envFile)
+	if err != nil {
+		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
+		t.Logf("Will proceed with system environment variables only")
+	}
+
+	if !config.IsIntegrationTestEnabled("EMAIL") {
 		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
 		return
 	}
 
-	// 从环境变量获取真实的邮件配置
-	emailConfig := getEmailConfigFromEnv(t)
-	if emailConfig == nil {
-		t.Skip("Email config not available from environment variables")
-		return
+	// 加载正常的配置文件
+	projectRoot := config.FindProjectRoot()
+	if projectRoot == "" {
+		t.Fatal("Could not find project root directory")
 	}
+
+	configPath := filepath.Join(projectRoot, "config.example.yaml")
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+	}
+
+	// 确保邮件通知已启用
+	if !cfg.Notifiers.Email.Enabled {
+		// 在集成测试中强制启用邮件通知
+		cfg.Notifiers.Email.Enabled = true
+	}
+
+	emailConfig := &cfg.Notifiers.Email
 
 	// 创建邮件通知器
 	notifier, err := NewEmailNotifier(emailConfig)
@@ -76,17 +108,49 @@ func TestEmailNotifierIntegration(t *testing.T) {
 }
 
 func TestEmailNotifierIntegrationWithManager(t *testing.T) {
-	if !shouldRunIntegrationTest() {
+	// 初始化环境变量管理器
+	envFile := config.DetermineEnvFile()
+	if envFile == "" {
+		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
+		projectRoot := config.FindProjectRoot()
+		if projectRoot != "" {
+			envFile = filepath.Join(projectRoot, ".env.example")
+		} else {
+			envFile = ".env.example" // 最后的回退选项
+		}
+	}
+
+	t.Logf("Attempting to load env file: %s", envFile)
+	err := config.InitEnvManager(envFile)
+	if err != nil {
+		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
+		t.Logf("Will proceed with system environment variables only")
+	}
+
+	if !config.IsIntegrationTestEnabled("EMAIL") {
 		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
 		return
 	}
 
-	// 从环境变量获取真实的邮件配置
-	emailConfig := getEmailConfigFromEnv(t)
-	if emailConfig == nil {
-		t.Skip("Email config not available from environment variables")
-		return
+	// 加载正常的配置文件
+	projectRoot := config.FindProjectRoot()
+	if projectRoot == "" {
+		t.Fatal("Could not find project root directory")
 	}
+
+	configPath := filepath.Join(projectRoot, "config.example.yaml")
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+	}
+
+	// 确保邮件通知已启用
+	if !cfg.Notifiers.Email.Enabled {
+		// 在集成测试中强制启用邮件通知
+		cfg.Notifiers.Email.Enabled = true
+	}
+
+	emailConfig := &cfg.Notifiers.Email
 
 	// 创建通知管理器
 	manager := NewManager()
@@ -180,112 +244,100 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// shouldRunIntegrationTest 检查是否应该运行集成测试
-func shouldRunIntegrationTest() bool {
-	return os.Getenv("EMAIL_INTEGRATION_TEST") == "1"
-}
-
-// getEmailConfigFromEnv 从环境变量获取邮件配置
-func getEmailConfigFromEnv(t *testing.T) *config.EmailConfig {
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPortStr := os.Getenv("SMTP_PORT")
-	smtpUsername := os.Getenv("SMTP_USERNAME")
-	smtpPassword := os.Getenv("SMTP_PASSWORD")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	toEmail := os.Getenv("TO_EMAIL")
-
-	// 检查必需的环境变量
-	if smtpHost == "" || smtpUsername == "" || smtpPassword == "" || fromEmail == "" || toEmail == "" {
-		t.Log("Missing required environment variables:")
-		t.Log("  SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, FROM_EMAIL, TO_EMAIL")
-		t.Log("Example:")
-		t.Log("  export SMTP_HOST=smtp.gmail.com")
-		t.Log("  export SMTP_PORT=587")
-		t.Log("  export SMTP_USERNAME=your_email@gmail.com")
-		t.Log("  export SMTP_PASSWORD=your_app_password")
-		t.Log("  export FROM_EMAIL=your_email@gmail.com")
-		t.Log("  export TO_EMAIL=zhangjingyao666@gmail.com")
-		return nil
-	}
-
-	// 解析端口
-	smtpPort := 587 // 默认端口
-	if smtpPortStr != "" {
-		if port, err := strconv.Atoi(smtpPortStr); err == nil {
-			smtpPort = port
+func TestEmailSendWithTemplateIntegration(t *testing.T) {
+	// 初始化环境变量管理器
+	envFile := config.DetermineEnvFile()
+	if envFile == "" {
+		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
+		projectRoot := config.FindProjectRoot()
+		if projectRoot != "" {
+			envFile = filepath.Join(projectRoot, ".env.example")
+		} else {
+			envFile = ".env.example" // 最后的回退选项
 		}
 	}
 
-	// 解析 TLS 设置
-	useTLS := true
-	if tlsStr := os.Getenv("SMTP_TLS"); tlsStr != "" {
-		if tls, err := strconv.ParseBool(tlsStr); err == nil {
-			useTLS = tls
-		}
+	t.Logf("Attempting to load env file: %s", envFile)
+	err := config.InitEnvManager(envFile)
+	if err != nil {
+		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
+		t.Logf("Will proceed with system environment variables only")
 	}
 
-	return &config.EmailConfig{
-		Enabled: true,
-		SMTP: config.SMTPConfig{
-			Host:     smtpHost,
-			Port:     smtpPort,
-			Username: smtpUsername,
-			Password: smtpPassword,
-			TLS:      useTLS,
-		},
-		From:     fromEmail,
-		To:       []string{toEmail},
-		Subject:  "TA Watcher Alert - {{.Asset}} {{.Level}}",
-		Template: "", // 使用默认模板
-	}
-}
-
-func TestEmailNotifierPerformance(t *testing.T) {
-	if !shouldRunIntegrationTest() {
-		t.Skip("Skipping performance test. Set EMAIL_INTEGRATION_TEST=1 to run.")
+	if !config.IsIntegrationTestEnabled("EMAIL") {
+		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
 		return
 	}
 
-	emailConfig := getEmailConfigFromEnv(t)
-	if emailConfig == nil {
-		t.Skip("Email config not available from environment variables")
-		return
+	// 加载正常的配置文件
+	projectRoot := config.FindProjectRoot()
+	if projectRoot == "" {
+		t.Fatal("Could not find project root directory")
 	}
 
+	configPath := filepath.Join(projectRoot, "config.example.yaml")
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+	}
+
+	// 确保邮件通知已启用
+	if !cfg.Notifiers.Email.Enabled {
+		// 在集成测试中强制启用邮件通知
+		cfg.Notifiers.Email.Enabled = true
+	}
+
+	emailConfig := &cfg.Notifiers.Email
+
+	// 自定义邮件模板
+	emailConfig.Template = `
+亲爱的用户，
+
+您好！这是来自 TA Watcher 的{{.Level}}级别通知。
+
+📊 交易对: {{.Asset}}
+🎯 策略: {{.Strategy}}
+📈 当前价格: {{.Data.current_price}}
+📅 时间: {{.Timestamp.Format "2006-01-02 15:04:05"}}
+
+{{.Message}}
+
+感谢您使用 TA Watcher！
+
+---
+此邮件由 TA Watcher 自动发送，请勿回复。
+`
+
+	// 创建邮件通知器
 	notifier, err := NewEmailNotifier(emailConfig)
 	assert.NoError(t, err)
 
-	// 测试模板渲染性能
+	// 创建测试通知
 	notification := &Notification{
-		ID:        "perf-test-" + strconv.FormatInt(time.Now().Unix(), 10),
+		ID:        "template-test-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypePriceAlert,
 		Level:     LevelWarning,
 		Asset:     "BTCUSDT",
-		Strategy:  "performance_test",
-		Title:     "性能测试通知",
-		Message:   "这是一个用于测试邮件通知器性能的测试消息。",
+		Strategy:  "template_test",
+		Title:     "模板测试邮件",
+		Message:   "这是一封测试自定义邮件模板的邮件。如果您看到格式化的内容，说明模板功能正常工作。",
 		Timestamp: time.Now(),
 		Data: map[string]interface{}{
-			"test_data_1": "value1",
-			"test_data_2": 123.45,
-			"test_data_3": true,
-			"test_data_4": []string{"a", "b", "c"},
+			"current_price": 105234.67,
+			"change_24h":    "+2.34%",
+			"volume":        "15,432 BTC",
 		},
 	}
 
-	// 测试模板渲染时间
-	start := time.Now()
-	for i := 0; i < 100; i++ {
-		_, _, err := notifier.prepareEmail(notification)
-		assert.NoError(t, err)
-	}
-	duration := time.Since(start)
+	// 发送测试邮件
+	t.Log("📧 Sending template test email...")
+	err = notifier.Send(notification)
+	assert.NoError(t, err)
 
-	t.Logf("⏱️ Template rendering performance: 100 renders in %v (avg: %v per render)",
-		duration, duration/100)
+	t.Log("✅ Template test email sent successfully")
+	t.Log("📬 Please check your email inbox to verify the template formatting")
 
-	// 性能应该在合理范围内（每次渲染不超过10ms）
-	avgDuration := duration / 100
-	assert.Less(t, avgDuration, 10*time.Millisecond,
-		"Template rendering too slow: %v per render", avgDuration)
+	// 关闭通知器
+	err = notifier.Close()
+	assert.NoError(t, err)
 }

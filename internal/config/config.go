@@ -84,6 +84,48 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
+	// 展开环境变量
+	if err := expandEnvVars(config); err != nil {
+		return nil, fmt.Errorf("failed to expand environment variables: %w", err)
+	}
+
+	// 验证配置
+	if err := config.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
+	return config, nil
+}
+
+// LoadConfigWithEnvFile 从文件加载配置并指定环境变量文件
+func LoadConfigWithEnvFile(filename string, envFile string) (*Config, error) {
+	// 初始化环境变量管理器
+	if err := InitEnvManager(envFile); err != nil {
+		return nil, fmt.Errorf("failed to initialize env manager: %w", err)
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found: %s", filename)
+	}
+
+	// 读取文件内容
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// 解析 YAML
+	config := DefaultConfig()
+	if err := yaml.Unmarshal(data, config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// 展开环境变量
+	if err := expandEnvVars(config); err != nil {
+		return nil, fmt.Errorf("failed to expand environment variables: %w", err)
+	}
+
 	// 验证配置
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)

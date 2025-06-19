@@ -4,7 +4,6 @@ package binance
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 
 // TestBinanceClientIntegration 集成测试（测试真实API连接）
 func TestBinanceClientIntegration(t *testing.T) {
-	if os.Getenv("BINANCE_INTEGRATION_TEST") == "" {
+	if !config.IsIntegrationTestEnabled("BINANCE") {
 		t.Skip("Skipping integration test. Set BINANCE_INTEGRATION_TEST=1 to run.")
 	}
 
@@ -96,7 +95,7 @@ func TestBinanceClientIntegration(t *testing.T) {
 
 // TestBinanceClientPerformance 性能测试
 func TestBinanceClientPerformance(t *testing.T) {
-	if os.Getenv("BINANCE_INTEGRATION_TEST") == "" {
+	if !config.IsIntegrationTestEnabled("BINANCE") {
 		t.Skip("Skipping integration test. Set BINANCE_INTEGRATION_TEST=1 to run.")
 	}
 

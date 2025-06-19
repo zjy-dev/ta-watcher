@@ -21,30 +21,30 @@ watcher:
 notifiers:
   # 邮件通知
   email:
-    enabled: false                  # 是否启用邮件通知
+    enabled: false                  # 是否启用邮件通知（集成测试时设为true）
     smtp:
-      host: "smtp.gmail.com"        # SMTP服务器地址
+      host: "${SMTP_HOST:smtp.gmail.com}"  # SMTP服务器地址（从环境变量获取，默认gmail）
       port: 587                     # SMTP端口
-      username: ""                  # SMTP用户名
-      password: ""                  # SMTP密码（建议使用应用专用密码）
+      username: "${SMTP_USERNAME}"  # SMTP用户名（从环境变量获取）
+      password: "${SMTP_PASSWORD}"  # SMTP密码（从环境变量获取）
       tls: true                     # 是否使用TLS加密
-    from: ""                        # 发送者邮箱
+    from: "${FROM_EMAIL}"           # 发送者邮箱（从环境变量获取）
     to:                             # 接收者邮箱列表
-      - "zhangjingyao666@gmail.com"
+      - "${TO_EMAIL:zhangjingyao666@gmail.com}"  # 从环境变量获取，带默认值
     subject: "TA Watcher Alert - {{.Asset}} {{.Level}}"  # 邮件主题模板
     template: ""                    # 邮件内容模板（留空使用默认）
   
   # 飞书通知
   feishu:
     enabled: false                  # 是否启用飞书通知
-    webhook_url: ""                 # 飞书机器人Webhook URL
-    secret: ""                      # 签名密钥（可选）
+    webhook_url: "${FEISHU_WEBHOOK_URL}"  # 飞书机器人Webhook URL（从环境变量获取）
+    secret: "${FEISHU_SECRET}"      # 签名密钥（从环境变量获取，可选）
     template: ""                    # 消息模板（留空使用默认）
   
   # 微信通知
   wechat:
     enabled: false                  # 是否启用微信通知
-    webhook_url: ""                 # 企业微信机器人Webhook URL
+    webhook_url: "${WECHAT_WEBHOOK_URL}"  # 企业微信机器人Webhook URL（从环境变量获取）
     template: ""                    # 消息模板（留空使用默认）
 
 # 监控资产列表
@@ -103,3 +103,4 @@ strategies:
       lookback_period: 20           # 回看周期
       breakout_threshold: 0.02      # 突破阈值（2%）
       volume_multiplier: 1.5        # 成交量倍数
+

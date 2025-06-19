@@ -35,7 +35,7 @@ help: ## 显示帮助信息
 	@echo "$(COLOR_BOLD)测试命令:$(COLOR_RESET)"
 	@echo "  $(COLOR_GREEN)test-all$(COLOR_RESET)             运行所有测试（单元测试 + 集成测试）"
 	@echo "  $(COLOR_GREEN)test-unit$(COLOR_RESET)            只运行单元测试"
-	@echo "  $(COLOR_GREEN)test-integration$(COLOR_RESET)     只运行集成测试"
+	@echo "  $(COLOR_GREEN)test-integration$(COLOR_RESET)     运行集成测试"
 	@echo "  $(COLOR_GREEN)test-bench$(COLOR_RESET)           运行基准测试"
 	@echo "  $(COLOR_GREEN)test-coverage$(COLOR_RESET)        运行测试并生成覆盖率报告"
 	@echo ""
@@ -51,7 +51,7 @@ test-all: ## 运行所有测试（包括集成测试）
 	@$(MAKE) test-unit
 	@echo ""
 	@echo "$(COLOR_YELLOW)🔗 运行集成测试...$(COLOR_RESET)"
-	@BINANCE_INTEGRATION_TEST=1 EMAIL_INTEGRATION_TEST=1 $(MAKE) test-integration
+	@$(MAKE) test-integration
 	@echo ""
 	@echo "$(COLOR_GREEN)✅ 所有测试完成！$(COLOR_RESET)"
 
@@ -67,25 +67,26 @@ test-unit: ## 运行单元测试
 test-integration: ## 运行集成测试
 	@echo "$(COLOR_BOLD)🔗 运行集成测试...$(COLOR_RESET)"
 	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@echo "$(COLOR_YELLOW)⚠️  注意: 集成测试需要设置相应的环境变量$(COLOR_RESET)"
-	@echo "$(COLOR_YELLOW)   - Binance API测试: BINANCE_INTEGRATION_TEST=1$(COLOR_RESET)"
-	@echo "$(COLOR_YELLOW)   - 邮件测试: EMAIL_INTEGRATION_TEST=1 + 邮件配置$(COLOR_RESET)"
-	@echo ""
-	@echo "$(COLOR_BLUE)🔍 运行Binance集成测试...$(COLOR_RESET)"
-	@if [ "$$BINANCE_INTEGRATION_TEST" = "1" ]; then \
-		go test -v -timeout $(TEST_TIMEOUT) -tags=integration ./internal/binance/...; \
-	else \
-		echo "$(COLOR_YELLOW)⏭️  跳过Binance集成测试 (设置 BINANCE_INTEGRATION_TEST=1 启用)$(COLOR_RESET)"; \
-	fi
-	@echo ""
-	@echo "$(COLOR_BLUE)📧 运行邮件集成测试...$(COLOR_RESET)"
-	@if [ "$$EMAIL_INTEGRATION_TEST" = "1" ]; then \
-		go test -v -timeout $(TEST_TIMEOUT) -tags=integration -run ".*Integration.*" ./internal/notifiers/...; \
-	else \
-		echo "$(COLOR_YELLOW)⏭️  跳过邮件集成测试 (设置 EMAIL_INTEGRATION_TEST=1 启用)$(COLOR_RESET)"; \
-	fi
+	@go test -v -timeout $(TEST_TIMEOUT) -tags=integration -run "Integration" ./internal/...
 	@echo ""
 	@echo "$(COLOR_GREEN)✅ 集成测试完成！$(COLOR_RESET)"
+
+.PHONY: test-integration-real
+test-integration-real: ## 运行真实集成测试（使用.env配置）
+	@echo "$(COLOR_BOLD)🔗 运行真实集成测试（使用.env配置）...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@if [ -f .env ]; then \
+		echo "$(COLOR_YELLOW)📋 从 .env 文件加载真实配置...$(COLOR_RESET)"; \
+		export USE_REAL_ENV=1 && \
+		go test -v -timeout $(TEST_TIMEOUT) -tags=integration -run "Integration" ./internal/...; \
+	else \
+		echo "$(COLOR_RED)❌ 未找到 .env 文件$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)💡 提示: 复制 .env.example 到 .env 并配置真实邮件信息$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)   命令: cp .env.example .env$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@echo ""
+	@echo "$(COLOR_GREEN)✅ 真实集成测试完成！$(COLOR_RESET)"
 
 .PHONY: test-bench
 test-bench: ## 运行基准测试
@@ -110,14 +111,6 @@ test-coverage: ## 运行测试并生成覆盖率报告
 	@echo "$(COLOR_GREEN)✅ 覆盖率报告已生成:$(COLOR_RESET)"
 	@echo "  - 文本报告: $(COVERAGE_FILE)"
 	@echo "  - HTML报告: $(COVERAGE_HTML)"
-
-.PHONY: test-quick
-test-quick: ## 快速测试（仅运行关键测试）
-	@echo "$(COLOR_BOLD)⚡ 快速测试...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@go test -short -timeout 30s ./internal/config ./internal/binance ./internal/notifiers
-	@echo ""
-	@echo "$(COLOR_GREEN)✅ 快速测试完成！$(COLOR_RESET)"
 
 .PHONY: test-verbose
 test-verbose: ## 详细模式运行所有单元测试

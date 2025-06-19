@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
+	"net"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -212,16 +213,13 @@ func (e *EmailNotifier) buildMessage(subject, body string) []byte {
 	return msg.Bytes()
 }
 
-// sendWithTLS 使用 TLS 发送邮件
+// sendWithTLS 使用 STARTTLS 发送邮件
 func (e *EmailNotifier) sendWithTLS(addr string, msg []byte) error {
-	// 建立 TLS 连接
-	tlsConfig := &tls.Config{
-		ServerName: e.config.SMTP.Host,
-	}
-
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// Gmail 等服务商在端口 587 使用 STARTTLS，而不是直接 TLS
+	// 先建立普通连接
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
-		return fmt.Errorf("failed to connect with TLS: %w", err)
+		return fmt.Errorf("failed to connect: %w", err)
 	}
 	defer conn.Close()
 
@@ -231,6 +229,15 @@ func (e *EmailNotifier) sendWithTLS(addr string, msg []byte) error {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
 	defer client.Quit()
+
+	// 启动 TLS
+	tlsConfig := &tls.Config{
+		ServerName: e.config.SMTP.Host,
+	}
+
+	if err := client.StartTLS(tlsConfig); err != nil {
+		return fmt.Errorf("failed to start TLS: %w", err)
+	}
 
 	// 认证
 	if err := client.Auth(e.auth); err != nil {

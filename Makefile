@@ -4,12 +4,12 @@
 # 项目配置
 PROJECT_NAME := ta-watcher
 BINARY_NAME := ta-watcher
-GO_VERSION := 1.21
+GO_VERSION := 1.24
 
 # 目录
-CMD_DIR := ./cmd
+CMD_DIR := ./cmd/watcher
 INTERNAL_DIR := ./internal
-EXAMPLES_DIR := ./examples
+STRATEGIES_DIR := ./strategies
 
 # 测试配置
 TEST_TIMEOUT := 5m
@@ -120,55 +120,158 @@ test-verbose: ## 详细模式运行所有单元测试
 	@echo ""
 	@echo "$(COLOR_GREEN)✅ 详细测试完成！$(COLOR_RESET)"
 
+# 测试相关
+.PHONY: test
+test: ## 运行所有单元测试
+	@echo "$(COLOR_BLUE)运行单元测试...$(COLOR_RESET)"
+	@go test -v ./internal/...
+
+.PHONY: test-watcher
+test-watcher: ## 运行 watcher 模块测试
+	@echo "$(COLOR_BLUE)运行 watcher 模块测试...$(COLOR_RESET)"
+	@go test -v ./internal/watcher/
+
+.PHONY: test-strategy
+test-strategy: ## 运行 strategy 模块测试
+	@echo "$(COLOR_BLUE)运行 strategy 模块测试...$(COLOR_RESET)"
+	@go test -v ./internal/strategy/
+
+.PHONY: test-integration
+test-integration: ## 运行集成测试
+	@echo "$(COLOR_BLUE)运行集成测试...$(COLOR_RESET)"
+	@INTEGRATION_TEST=1 go test -v ./internal/watcher/ -run Integration
+
+.PHONY: test-stress
+test-stress: ## 运行压力测试
+	@echo "$(COLOR_YELLOW)运行压力测试...$(COLOR_RESET)"
+	@STRESS_TEST=1 go test -v ./internal/watcher/ -run Stress -timeout 30s
+
+.PHONY: test-recovery
+test-recovery: ## 运行错误恢复测试
+	@echo "$(COLOR_YELLOW)运行错误恢复测试...$(COLOR_RESET)"
+	@RECOVERY_TEST=1 go test -v ./internal/watcher/ -run Recovery -timeout 15s
+
+.PHONY: test-coverage
+test-coverage: ## 运行测试并生成覆盖率报告
+	@echo "$(COLOR_BLUE)生成测试覆盖率报告...$(COLOR_RESET)"
+	@go test -coverprofile=$(COVERAGE_FILE) ./internal/...
+	@go tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
+	@echo "$(COLOR_GREEN)覆盖率报告已生成: $(COVERAGE_HTML)$(COLOR_RESET)"
+
+.PHONY: benchmark
+benchmark: ## 运行基准测试
+	@echo "$(COLOR_BLUE)运行基准测试...$(COLOR_RESET)"
+	@go test -bench=. -benchmem ./internal/watcher/
+
+.PHONY: test-all
+test-all: test test-integration test-stress test-recovery test-coverage ## 运行所有测试
+
+# 构建和运行
 .PHONY: build
-build: ## 构建项目
-	@echo "$(COLOR_BOLD)🔨 构建项目...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@go mod tidy
-	@go mod verify
-	@if [ -d "$(CMD_DIR)" ]; then \
-		go build -o bin/$(BINARY_NAME) $(CMD_DIR)/...; \
-		echo "$(COLOR_GREEN)✅ 构建完成: bin/$(BINARY_NAME)$(COLOR_RESET)"; \
-	else \
-		go build ./...; \
-		echo "$(COLOR_GREEN)✅ 库构建完成$(COLOR_RESET)"; \
+build: ## 构建应用程序
+	@echo "$(COLOR_BLUE)构建 $(BINARY_NAME)...$(COLOR_RESET)"
+	@go build -o bin/$(BINARY_NAME) $(CMD_DIR)
+	@echo "$(COLOR_GREEN)构建完成: bin/$(BINARY_NAME)$(COLOR_RESET)"
+
+.PHONY: run
+run: ## 运行应用程序
+	@echo "$(COLOR_BLUE)运行 $(BINARY_NAME)...$(COLOR_RESET)"
+	@go run $(CMD_DIR) -config config.yaml -strategies $(STRATEGIES_DIR)
+
+.PHONY: run-daemon
+run-daemon: ## 后台运行应用程序
+	@echo "$(COLOR_BLUE)后台运行 $(BINARY_NAME)...$(COLOR_RESET)"
+	@go run $(CMD_DIR) -config config.yaml -strategies $(STRATEGIES_DIR) -daemon
+
+.PHONY: health
+health: ## 健康检查
+	@echo "$(COLOR_BLUE)执行健康检查...$(COLOR_RESET)"
+	@go run $(CMD_DIR) -health
+
+.PHONY: generate-strategy
+generate-strategy: ## 生成策略模板 (用法: make generate-strategy STRATEGY=my_strategy)
+	@if [ -z "$(STRATEGY)" ]; then \
+		echo "$(COLOR_RED)请指定策略名称: make generate-strategy STRATEGY=策略名称$(COLOR_RESET)"; \
+		exit 1; \
 	fi
+	@echo "$(COLOR_BLUE)生成策略模板: $(STRATEGY)...$(COLOR_RESET)"
+	@mkdir -p $(STRATEGIES_DIR)
+	@go run $(CMD_DIR) -generate $(STRATEGY) -strategies $(STRATEGIES_DIR)
 
 .PHONY: clean
-clean: ## 清理构建文件和测试文件
-	@echo "$(COLOR_BOLD)🧹 清理文件...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+clean: ## 清理构建文件
+	@echo "$(COLOR_YELLOW)清理构建文件...$(COLOR_RESET)"
 	@rm -rf bin/
-	@rm -f $(COVERAGE_FILE)
-	@rm -f $(COVERAGE_HTML)
-	@go clean ./...
-	@echo "$(COLOR_GREEN)✅ 清理完成！$(COLOR_RESET)"
+	@rm -f $(COVERAGE_FILE) $(COVERAGE_HTML)
+	@echo "$(COLOR_GREEN)清理完成$(COLOR_RESET)"
 
-.PHONY: fmt
-fmt: ## 格式化代码
-	@echo "$(COLOR_BOLD)✨ 格式化代码...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@go fmt ./...
-	@echo "$(COLOR_GREEN)✅ 代码格式化完成！$(COLOR_RESET)"
-
-.PHONY: lint
-lint: ## 运行代码检查
-	@echo "$(COLOR_BOLD)🔍 运行代码检查...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@if command -v golangci-lint >/dev/null 2>&1; then \
-		golangci-lint run ./...; \
-		echo "$(COLOR_GREEN)✅ 代码检查完成！$(COLOR_RESET)"; \
+# 策略相关
+.PHONY: compile-strategies
+compile-strategies: ## 编译自定义策略为插件
+	@echo "$(COLOR_BLUE)编译策略插件...$(COLOR_RESET)"
+	@if [ -d "$(STRATEGIES_DIR)" ]; then \
+		for file in $(STRATEGIES_DIR)/*_strategy.go; do \
+			if [ -f "$$file" ]; then \
+				name=$$(basename $$file .go); \
+				echo "编译策略: $$name"; \
+				go build -buildmode=plugin -o $(STRATEGIES_DIR)/$$name.so $$file; \
+			fi; \
+		done; \
+		echo "$(COLOR_GREEN)策略编译完成$(COLOR_RESET)"; \
 	else \
-		echo "$(COLOR_YELLOW)⚠️  golangci-lint 未安装，跳过代码检查$(COLOR_RESET)"; \
-		echo "$(COLOR_YELLOW)   安装方法: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)策略目录不存在: $(STRATEGIES_DIR)$(COLOR_RESET)"; \
 	fi
 
+.PHONY: list-strategies
+list-strategies: ## 列出策略文件
+	@echo "$(COLOR_BLUE)策略文件列表:$(COLOR_RESET)"
+	@if [ -d "$(STRATEGIES_DIR)" ]; then \
+		ls -la $(STRATEGIES_DIR)/*.go $(STRATEGIES_DIR)/*.so 2>/dev/null || echo "没有找到策略文件"; \
+	else \
+		echo "策略目录不存在: $(STRATEGIES_DIR)"; \
+	fi
+
+# 开发工具
+.PHONY: fmt
+fmt: ## 格式化代码
+	@echo "$(COLOR_BLUE)格式化代码...$(COLOR_RESET)"
+	@go fmt ./...
+
 .PHONY: vet
-vet: ## 运行 go vet 检查
-	@echo "$(COLOR_BOLD)🔍 运行 go vet 检查...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+vet: ## 代码检查
+	@echo "$(COLOR_BLUE)代码检查...$(COLOR_RESET)"
 	@go vet ./...
-	@echo "$(COLOR_GREEN)✅ go vet 检查完成！$(COLOR_RESET)"
+
+.PHONY: mod-tidy
+mod-tidy: ## 整理依赖
+	@echo "$(COLOR_BLUE)整理依赖...$(COLOR_RESET)"
+	@go mod tidy
+
+.PHONY: dev-setup
+dev-setup: mod-tidy ## 开发环境设置
+	@echo "$(COLOR_BLUE)设置开发环境...$(COLOR_RESET)"
+	@if [ ! -f "config.yaml" ] && [ -f "config.example.yaml" ]; then \
+		cp config.example.yaml config.yaml; \
+		echo "$(COLOR_GREEN)已复制配置文件模板$(COLOR_RESET)"; \
+	fi
+	@mkdir -p $(STRATEGIES_DIR)
+	@mkdir -p bin/
+	@echo "$(COLOR_GREEN)开发环境设置完成$(COLOR_RESET)"
+
+.PHONY: quick-start
+quick-start: dev-setup build ## 快速开始 (设置环境并运行)
+	@echo "$(COLOR_GREEN)快速开始 TA Watcher...$(COLOR_RESET)"
+	@./bin/$(BINARY_NAME) -config config.yaml -strategies $(STRATEGIES_DIR)
+
+.PHONY: ci
+ci: deps check test-coverage ## CI流水线（依赖、检查、覆盖率测试）
+	@echo ""
+	@echo "$(COLOR_GREEN)✅ CI流水线完成！$(COLOR_RESET)"
+
+.PHONY: check
+check: fmt vet test-unit ## 运行所有检查（格式化、vet、单元测试）
+	@echo ""
+	@echo "$(COLOR_GREEN)✅ 所有检查完成！$(COLOR_RESET)"
 
 .PHONY: deps
 deps: ## 安装和更新依赖
@@ -186,48 +289,6 @@ deps-update: ## 更新所有依赖到最新版本
 	@go mod tidy
 	@echo "$(COLOR_GREEN)✅ 依赖更新完成！$(COLOR_RESET)"
 
-.PHONY: check
-check: fmt vet test-unit ## 运行所有检查（格式化、vet、单元测试）
-	@echo ""
-	@echo "$(COLOR_GREEN)✅ 所有检查完成！$(COLOR_RESET)"
-
-.PHONY: ci
-ci: deps check test-coverage ## CI流水线（依赖、检查、覆盖率测试）
-	@echo ""
-	@echo "$(COLOR_GREEN)✅ CI流水线完成！$(COLOR_RESET)"
-
-.PHONY: dev-setup
-dev-setup: ## 开发环境设置
-	@echo "$(COLOR_BOLD)🛠️  设置开发环境...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@go mod download
-	@echo "$(COLOR_YELLOW)💡 推荐安装的工具:$(COLOR_RESET)"
-	@echo "  - golangci-lint: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
-	@echo "  - gofumpt: go install mvdan.cc/gofumpt@latest"
-	@echo ""
-	@echo "$(COLOR_YELLOW)🧪 运行集成测试需要设置环境变量:$(COLOR_RESET)"
-	@echo "  - BINANCE_INTEGRATION_TEST=1 (启用Binance API测试)"
-	@echo "  - EMAIL_INTEGRATION_TEST=1 (启用邮件测试)"
-	@echo "  - EMAIL_SMTP_HOST, EMAIL_SMTP_PORT, EMAIL_USERNAME, EMAIL_PASSWORD (邮件配置)"
-	@echo ""
-	@echo "$(COLOR_GREEN)✅ 开发环境设置完成！$(COLOR_RESET)"
-
-.PHONY: examples
-examples: ## 运行示例代码
-	@echo "$(COLOR_BOLD)📚 运行示例...$(COLOR_RESET)"
-	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
-	@if [ -d "$(EXAMPLES_DIR)" ]; then \
-		for example in $(EXAMPLES_DIR)/*.go; do \
-			if [ -f "$$example" ]; then \
-				echo "$(COLOR_YELLOW)运行示例: $$example$(COLOR_RESET)"; \
-				go run "$$example"; \
-				echo ""; \
-			fi; \
-		done; \
-		echo "$(COLOR_GREEN)✅ 示例运行完成！$(COLOR_RESET)"; \
-	else \
-		echo "$(COLOR_YELLOW)⚠️  未找到示例目录$(COLOR_RESET)"; \
-	fi
 
 # 默认目标
 .DEFAULT_GOAL := help

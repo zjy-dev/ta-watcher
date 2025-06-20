@@ -49,19 +49,6 @@ func DefaultConfig() *Config {
 			"BTCUSDT",
 			"ETHUSDT",
 		},
-		Strategies: []StrategyConfig{
-			{
-				Name:     "rsi_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT", "ETHUSDT"},
-				Interval: "1h",
-				Params: map[string]interface{}{
-					"period":     14,
-					"oversold":   30,
-					"overbought": 70,
-				},
-			},
-		},
 	}
 }
 
@@ -177,13 +164,6 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("assets list cannot be empty")
 	}
 
-	// 验证策略配置
-	for i, strategy := range c.Strategies {
-		if err := strategy.Validate(); err != nil {
-			return fmt.Errorf("strategy[%d]: %w", i, err)
-		}
-	}
-
 	return nil
 }
 
@@ -283,32 +263,6 @@ func (c *WechatConfig) Validate() error {
 	}
 	if c.WebhookURL == "" {
 		return fmt.Errorf("webhook_url cannot be empty")
-	}
-	return nil
-}
-
-// Validate 验证策略配置
-func (c *StrategyConfig) Validate() error {
-	if c.Name == "" {
-		return fmt.Errorf("strategy name cannot be empty")
-	}
-	if len(c.Assets) == 0 {
-		return fmt.Errorf("strategy assets cannot be empty")
-	}
-	if c.Interval == "" {
-		return fmt.Errorf("strategy interval cannot be empty")
-	}
-	// 验证 interval 格式
-	validIntervals := []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w", "1M"}
-	valid := false
-	for _, interval := range validIntervals {
-		if c.Interval == interval {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return fmt.Errorf("invalid interval: %s", c.Interval)
 	}
 	return nil
 }

@@ -41,19 +41,6 @@ func TestWatcherIntegration(t *testing.T) {
 			},
 		},
 		Assets: []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "rsi_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT"},
-				Interval: "1h",
-				Params: map[string]interface{}{
-					"period":     14,
-					"oversold":   30,
-					"overbought": 70,
-				},
-			},
-		},
 	}
 
 	// 创建 Watcher
@@ -122,15 +109,6 @@ func TestWatcherWithCustomStrategy(t *testing.T) {
 			Email: config.EmailConfig{Enabled: false},
 		},
 		Assets: []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "test_integration_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT"},
-				Interval: "1h",
-				Params:   map[string]interface{}{},
-			},
-		},
 	}
 
 	// 创建带自定义策略目录的 Watcher
@@ -181,22 +159,6 @@ func TestWatcherStressTest(t *testing.T) {
 		Assets: []string{
 			"BTCUSDT", "ETHUSDT", "BNBUSDT", "ADAUSDT", "SOLUSDT",
 			"DOTUSDT", "LINKUSDT", "LTCUSDT", "BCUSDT", "XLMUSDT",
-		},
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "rsi_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT", "ETHUSDT", "BNBUSDT"},
-				Interval: "5m",
-				Params:   map[string]interface{}{"period": 14},
-			},
-			{
-				Name:     "macd_strategy",
-				Enabled:  true,
-				Assets:   []string{"ADAUSDT", "SOLUSDT", "DOTUSDT"},
-				Interval: "15m",
-				Params:   map[string]interface{}{},
-			},
 		},
 	}
 
@@ -269,15 +231,6 @@ func TestWatcherRecovery(t *testing.T) {
 			Email: config.EmailConfig{Enabled: false},
 		},
 		Assets: []string{"BTCUSDT", "INVALID_SYMBOL"}, // 包含无效交易对
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "rsi_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT", "INVALID_SYMBOL"},
-				Interval: "1m",
-				Params:   map[string]interface{}{"period": 14},
-			},
-		},
 	}
 
 	w, err := New(cfg)

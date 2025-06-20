@@ -203,25 +203,30 @@ func (w *Watcher) executeMonitoringCycle() {
 func (w *Watcher) generateMonitorTasks() []*MonitorTask {
 	var tasks []*MonitorTask
 
-	for _, strategyConfig := range w.config.Strategies {
-		if !strategyConfig.Enabled {
-			continue
-		}
+	// 内置的策略名称
+	strategyNames := []string{
+		"rsi_strategy",
+		"macd_strategy",
+		"ma_cross_strategy",
+	}
 
-		timeframe, err := ParseTimeframe(strategyConfig.Interval)
-		if err != nil {
-			w.errorChan <- fmt.Errorf("invalid timeframe %s for strategy %s: %w",
-				strategyConfig.Interval, strategyConfig.Name, err)
-			continue
-		}
+	// 预定义的时间框架组合
+	timeframes := []strategy.Timeframe{
+		strategy.Timeframe1h, // 1小时
+		strategy.Timeframe4h, // 4小时
+		strategy.Timeframe1d, // 1天
+	}
 
-		for _, symbol := range strategyConfig.Assets {
-			tasks = append(tasks, &MonitorTask{
-				Symbol:       symbol,
-				Timeframe:    timeframe,
-				StrategyName: strategyConfig.Name,
-				Config:       strategyConfig,
-			})
+	// 为每个策略、时间框架和资产组合创建任务
+	for _, strategyName := range strategyNames {
+		for _, timeframe := range timeframes {
+			for _, symbol := range w.config.Assets {
+				tasks = append(tasks, &MonitorTask{
+					Symbol:       symbol,
+					Timeframe:    timeframe,
+					StrategyName: strategyName,
+				})
+			}
 		}
 	}
 

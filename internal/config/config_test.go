@@ -31,10 +31,6 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Len(t, config.Assets, 2)
 	assert.Contains(t, config.Assets, "BTCUSDT")
 	assert.Contains(t, config.Assets, "ETHUSDT")
-
-	assert.Len(t, config.Strategies, 1)
-	assert.Equal(t, "rsi_strategy", config.Strategies[0].Name)
-	assert.True(t, config.Strategies[0].Enabled)
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -88,26 +84,6 @@ func TestConfigValidation(t *testing.T) {
 			}(),
 			wantErr: true,
 			errMsg:  "assets list cannot be empty",
-		},
-		{
-			name: "invalid strategy name",
-			config: func() *Config {
-				c := DefaultConfig()
-				c.Strategies[0].Name = ""
-				return c
-			}(),
-			wantErr: true,
-			errMsg:  "strategy name cannot be empty",
-		},
-		{
-			name: "invalid strategy interval",
-			config: func() *Config {
-				c := DefaultConfig()
-				c.Strategies[0].Interval = "invalid"
-				return c
-			}(),
-			wantErr: true,
-			errMsg:  "invalid interval",
 		},
 	}
 
@@ -281,7 +257,6 @@ func TestLoadAndSaveConfig(t *testing.T) {
 	assert.Equal(t, defaultConfig.Binance.RateLimit.RequestsPerMinute, loadedConfig.Binance.RateLimit.RequestsPerMinute)
 	assert.Equal(t, defaultConfig.Watcher.Interval, loadedConfig.Watcher.Interval)
 	assert.Equal(t, defaultConfig.Assets, loadedConfig.Assets)
-	assert.Len(t, loadedConfig.Strategies, len(defaultConfig.Strategies))
 }
 
 func TestLoadConfigFileNotFound(t *testing.T) {

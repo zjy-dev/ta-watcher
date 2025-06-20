@@ -206,15 +206,6 @@ watcher:
 assets:
   - "BTCUSDT"
   - "ETHUSDT"
-
-strategies:
-  - name: "test_strategy"
-    enabled: true
-    assets:
-      - "BTCUSDT"
-    interval: "1h"
-    params:
-      test_param: 1
 `
 
 	// 创建临时配置文件

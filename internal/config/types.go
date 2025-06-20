@@ -17,9 +17,6 @@ type Config struct {
 
 	// 资产配置
 	Assets []string `yaml:"assets"`
-
-	// 策略配置
-	Strategies []StrategyConfig `yaml:"strategies"`
 }
 
 // BinanceConfig Binance 配置
@@ -83,13 +80,4 @@ type WechatConfig struct {
 	Enabled    bool   `yaml:"enabled"`     // 是否启用
 	WebhookURL string `yaml:"webhook_url"` // Webhook URL
 	Template   string `yaml:"template"`    // 消息模板
-}
-
-// StrategyConfig 策略配置
-type StrategyConfig struct {
-	Name     string                 `yaml:"name"`     // 策略名称
-	Enabled  bool                   `yaml:"enabled"`  // 是否启用
-	Assets   []string               `yaml:"assets"`   // 监控资产
-	Params   map[string]interface{} `yaml:"params"`   // 策略参数
-	Interval string                 `yaml:"interval"` // K线间隔
 }

@@ -55,52 +55,7 @@ assets:
   - "ADAUSDT"                       # 卡尔达诺/USDT
   - "SOLUSDT"                       # Solana/USDT
 
-# 策略配置
-strategies:
-  # RSI策略
-  - name: "rsi_strategy"
-    enabled: true                   # 是否启用
-    assets:                         # 监控的资产
-      - "BTCUSDT"
-      - "ETHUSDT"
-    interval: "1h"                  # K线间隔
-    params:                         # 策略参数
-      period: 14                    # RSI周期
-      oversold: 30                  # 超卖阈值
-      overbought: 70                # 超买阈值
-      
-  # MACD策略
-  - name: "macd_strategy"
-    enabled: true
-    assets:
-      - "BTCUSDT"
-      - "ETHUSDT"
-      - "BNBUSDT"
-    interval: "4h"
-    params:
-      fast_period: 12               # 快线周期
-      slow_period: 26               # 慢线周期
-      signal_period: 9              # 信号线周期
-      
-  # 移动平均线金叉策略
-  - name: "golden_cross"
-    enabled: false                  # 暂时禁用
-    assets:
-      - "BTCUSDT"
-    interval: "1d"
-    params:
-      short_period: 50              # 短期均线
-      long_period: 200              # 长期均线
-      
-  # 价格突破策略
-  - name: "price_breakout"
-    enabled: true
-    assets:
-      - "BTCUSDT"
-      - "ETHUSDT"
-    interval: "15m"
-    params:
-      lookback_period: 20           # 回看周期
-      breakout_threshold: 0.02      # 突破阈值（2%）
-      volume_multiplier: 1.5        # 成交量倍数
+# 注意：策略现在完全由 Go 代码定义，不再需要配置文件设置
+# 请查看 internal/strategy/ 目录下的内置策略
+# 或在 strategies/ 目录下编写自定义策略
 

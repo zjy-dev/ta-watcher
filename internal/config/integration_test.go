@@ -62,19 +62,6 @@ func TestConfigIntegration(t *testing.T) {
 			},
 		},
 		Assets: []string{"BTCUSDT", "ETHUSDT"},
-		Strategies: []StrategyConfig{
-			{
-				Name:     "RSI_Strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT"},
-				Interval: "1h",
-				Params: map[string]interface{}{
-					"rsi_period": 14,
-					"overbought": 70.0,
-					"oversold":   30.0,
-				},
-			},
-		},
 	}
 
 	t.Run("SaveAndLoadConfig", func(t *testing.T) {
@@ -93,7 +80,6 @@ func TestConfigIntegration(t *testing.T) {
 		// 验证配置内容
 		assert.Equal(t, testConfig.Notifiers.Email.SMTP.Host, loadedConfig.Notifiers.Email.SMTP.Host)
 		assert.Equal(t, testConfig.Notifiers.Email.SMTP.Port, loadedConfig.Notifiers.Email.SMTP.Port)
-		assert.Equal(t, testConfig.Strategies[0].Name, loadedConfig.Strategies[0].Name)
 		assert.Equal(t, testConfig.Watcher.LogLevel, loadedConfig.Watcher.LogLevel)
 	})
 

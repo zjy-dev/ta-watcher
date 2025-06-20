@@ -61,15 +61,6 @@ func TestWatcherCreation(t *testing.T) {
 				Binance:   config.BinanceConfig{},
 				Notifiers: config.NotifiersConfig{},
 				Assets:    []string{"BTCUSDT"},
-				Strategies: []config.StrategyConfig{
-					{
-						Name:     "test_strategy",
-						Enabled:  true,
-						Assets:   []string{"BTCUSDT"},
-						Interval: "1h",
-						Params:   map[string]interface{}{},
-					},
-				},
 			},
 			wantErr: false,
 		},
@@ -107,15 +98,6 @@ func TestWatcherLifecycle(t *testing.T) {
 		Binance:   config.BinanceConfig{},
 		Notifiers: config.NotifiersConfig{},
 		Assets:    []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "test_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT"},
-				Interval: "1h",
-				Params:   map[string]interface{}{},
-			},
-		},
 	}
 
 	w, err := New(cfg)
@@ -154,10 +136,9 @@ func TestWatcherHealthStatus(t *testing.T) {
 			MaxWorkers: 5,
 			BufferSize: 20,
 		},
-		Binance:    config.BinanceConfig{},
-		Notifiers:  config.NotifiersConfig{},
-		Assets:     []string{"BTCUSDT", "ETHUSDT"},
-		Strategies: []config.StrategyConfig{},
+		Binance:   config.BinanceConfig{},
+		Notifiers: config.NotifiersConfig{},
+		Assets:    []string{"BTCUSDT", "ETHUSDT"},
 	}
 
 	w, err := New(cfg)
@@ -202,17 +183,6 @@ func TestWatcherStatistics(t *testing.T) {
 		Binance:   config.BinanceConfig{},
 		Notifiers: config.NotifiersConfig{},
 		Assets:    []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{
-			{
-				Name:     "rsi_strategy",
-				Enabled:  true,
-				Assets:   []string{"BTCUSDT"},
-				Interval: "1h",
-				Params: map[string]interface{}{
-					"period": 14,
-				},
-			},
-		},
 	}
 
 	w, err := New(cfg)
@@ -306,10 +276,9 @@ func TestWatcherOptions(t *testing.T) {
 			MaxWorkers: 5,
 			BufferSize: 10,
 		},
-		Binance:    config.BinanceConfig{},
-		Notifiers:  config.NotifiersConfig{},
-		Assets:     []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{},
+		Binance:   config.BinanceConfig{},
+		Notifiers: config.NotifiersConfig{},
+		Assets:    []string{"BTCUSDT"},
 	}
 
 	// 测试带策略目录选项
@@ -331,10 +300,9 @@ func TestWatcherConcurrentOperations(t *testing.T) {
 			MaxWorkers: 3,
 			BufferSize: 10,
 		},
-		Binance:    config.BinanceConfig{},
-		Notifiers:  config.NotifiersConfig{},
-		Assets:     []string{"BTCUSDT"},
-		Strategies: []config.StrategyConfig{},
+		Binance:   config.BinanceConfig{},
+		Notifiers: config.NotifiersConfig{},
+		Assets:    []string{"BTCUSDT"},
 	}
 
 	w, err := New(cfg)

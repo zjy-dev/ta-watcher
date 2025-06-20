@@ -56,7 +56,6 @@ type MonitorTask struct {
 	Symbol       string             `json:"symbol"`
 	Timeframe    strategy.Timeframe `json:"timeframe"`
 	StrategyName string             `json:"strategy_name"`
-	Config       config.StrategyConfig
 }
 
 // Statistics 监控统计信息

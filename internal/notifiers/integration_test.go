@@ -13,68 +13,48 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// 集成测试只在设置了环境变量时运行
+// TestEmailNotifierIntegration 邮件通知器集成测试
+// config 模块会自动根据环境选择合适的 .env 文件
 func TestEmailNotifierIntegration(t *testing.T) {
-	// 初始化环境变量管理器，优先使用 .env.example（用于集成测试）
-	envFile := config.DetermineEnvFile()
-	if envFile == "" {
-		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
-		projectRoot := config.FindProjectRoot()
-		if projectRoot != "" {
-			envFile = filepath.Join(projectRoot, ".env.example")
-		} else {
-			envFile = ".env.example" // 最后的回退选项
-		}
-	}
-
-	t.Logf("Attempting to load env file: %s", envFile)
-	err := config.InitEnvManager(envFile)
-	if err != nil {
-		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
-		t.Logf("Will proceed with system environment variables only")
-	}
-
+	// 检查是否启用了邮件集成测试
 	if !config.IsIntegrationTestEnabled("EMAIL") {
-		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
+		t.Skip("跳过集成测试。设置 EMAIL_INTEGRATION_TEST=1 来运行邮件测试。")
 		return
 	}
 
-	// 加载正常的配置文件
+	// 查找项目根目录
 	projectRoot := config.FindProjectRoot()
 	if projectRoot == "" {
-		t.Fatal("Could not find project root directory")
+		t.Fatal("找不到项目根目录")
 	}
 
+	// 加载示例配置文件，config 模块会自动处理环境变量展开
 	configPath := filepath.Join(projectRoot, "config.example.yaml")
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+		t.Fatalf("从 %s 加载配置失败: %v", configPath, err)
 	}
 
-	// 确保邮件通知已启用
-	if !cfg.Notifiers.Email.Enabled {
-		// 在集成测试中强制启用邮件通知
-		cfg.Notifiers.Email.Enabled = true
-	}
-
+	// 在集成测试中强制启用邮件通知
+	cfg.Notifiers.Email.Enabled = true
 	emailConfig := &cfg.Notifiers.Email
 
 	// 创建邮件通知器
 	notifier, err := NewEmailNotifier(emailConfig)
-	assert.NoError(t, err)
-	assert.True(t, notifier.IsEnabled())
+	assert.NoError(t, err, "创建邮件通知器应该成功")
+	assert.True(t, notifier.IsEnabled(), "邮件通知器应该已启用")
 
-	// 测试连接
+	// 测试邮件服务器连接
+	t.Log("🔗 正在测试邮件服务器连接...")
 	err = notifier.TestConnection()
 	if err != nil {
-		t.Logf("Email connection test failed: %v", err)
-		t.Skip("Email connection failed, skipping integration test")
+		t.Logf("邮件连接测试失败: %v", err)
+		t.Skip("邮件连接失败，跳过集成测试")
 		return
 	}
+	t.Log("✅ 邮件服务器连接测试通过")
 
-	t.Log("✅ Email connection test passed")
-
-	// 创建测试通知
+	// 创建测试通知消息
 	notification := &Notification{
 		ID:        "integration-test-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypeSystemAlert,
@@ -95,61 +75,41 @@ func TestEmailNotifierIntegration(t *testing.T) {
 	}
 
 	// 发送测试邮件
-	t.Log("📧 Sending test email...")
+	t.Log("📧 正在发送测试邮件...")
 	err = notifier.Send(notification)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "发送测试邮件应该成功")
 
-	t.Log("✅ Test email sent successfully")
-	t.Log("📬 Please check your email inbox to verify the email was received")
+	t.Log("✅ 测试邮件发送成功")
+	t.Log("📬 请检查您的邮箱以确认邮件已收到")
 
 	// 关闭通知器
 	err = notifier.Close()
-	assert.NoError(t, err)
+	assert.NoError(t, err, "关闭邮件通知器应该成功")
 }
 
+// TestEmailNotifierIntegrationWithManager 使用通知管理器的邮件集成测试
 func TestEmailNotifierIntegrationWithManager(t *testing.T) {
-	// 初始化环境变量管理器
-	envFile := config.DetermineEnvFile()
-	if envFile == "" {
-		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
-		projectRoot := config.FindProjectRoot()
-		if projectRoot != "" {
-			envFile = filepath.Join(projectRoot, ".env.example")
-		} else {
-			envFile = ".env.example" // 最后的回退选项
-		}
-	}
-
-	t.Logf("Attempting to load env file: %s", envFile)
-	err := config.InitEnvManager(envFile)
-	if err != nil {
-		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
-		t.Logf("Will proceed with system environment variables only")
-	}
-
+	// 检查是否启用了邮件集成测试
 	if !config.IsIntegrationTestEnabled("EMAIL") {
-		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
+		t.Skip("跳过集成测试。设置 EMAIL_INTEGRATION_TEST=1 来运行邮件测试。")
 		return
 	}
 
-	// 加载正常的配置文件
+	// 查找项目根目录
 	projectRoot := config.FindProjectRoot()
 	if projectRoot == "" {
-		t.Fatal("Could not find project root directory")
+		t.Fatal("找不到项目根目录")
 	}
 
+	// 加载示例配置文件，config 模块会自动处理环境变量展开
 	configPath := filepath.Join(projectRoot, "config.example.yaml")
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+		t.Fatalf("从 %s 加载配置失败: %v", configPath, err)
 	}
 
-	// 确保邮件通知已启用
-	if !cfg.Notifiers.Email.Enabled {
-		// 在集成测试中强制启用邮件通知
-		cfg.Notifiers.Email.Enabled = true
-	}
-
+	// 在集成测试中强制启用邮件通知
+	cfg.Notifiers.Email.Enabled = true
 	emailConfig := &cfg.Notifiers.Email
 
 	// 创建通知管理器
@@ -157,22 +117,23 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 
 	// 创建并添加邮件通知器
 	emailNotifier, err := NewEmailNotifier(emailConfig)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "创建邮件通知器应该成功")
 
 	err = manager.AddNotifier(emailNotifier)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "添加邮件通知器到管理器应该成功")
 
-	assert.Equal(t, 1, manager.TotalCount())
-	assert.Equal(t, 1, manager.EnabledCount())
+	assert.Equal(t, 1, manager.TotalCount(), "管理器应该包含1个通知器")
+	assert.Equal(t, 1, manager.EnabledCount(), "管理器应该有1个启用的通知器")
 
-	// 设置过滤器（只允许警告级别以上）
+	// 设置过滤器（只允许警告级别以上的通知）
 	filter := &NotificationFilter{
 		MinLevel: LevelWarning,
 		Types:    []NotificationType{TypePriceAlert, TypeStrategySignal},
 	}
 	manager.SetFilter(filter)
+	t.Log("🔽 已设置过滤器：只发送警告级别以上的价格警报和策略信号")
 
-	// 发送一个 INFO 级别的通知（应该被过滤）
+	// 发送一个 INFO 级别的通知（应该被过滤掉）
 	infoNotification := &Notification{
 		ID:        "integration-filtered-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypeSystemAlert,
@@ -182,9 +143,9 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 		Timestamp: time.Now(),
 	}
 
-	t.Log("📧 Sending filtered notification (should not be sent)...")
+	t.Log("📧 正在发送被过滤的通知（不应该发送）...")
 	err = manager.Send(infoNotification)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "发送被过滤的通知应该成功（但实际不会发送邮件）")
 
 	// 发送一个 WARNING 级别的价格警报（应该通过过滤器）
 	warningNotification := &Notification{
@@ -205,9 +166,9 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 		},
 	}
 
-	t.Log("📧 Sending warning notification (should be sent)...")
+	t.Log("📧 正在发送警告级别通知（应该会发送）...")
 	err = manager.Send(warningNotification)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "发送警告级别通知应该成功")
 
 	// 发送一个 CRITICAL 级别的策略信号
 	criticalNotification := &Notification{
@@ -229,64 +190,44 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 		},
 	}
 
-	t.Log("📧 Sending critical notification (should be sent)...")
+	t.Log("📧 正在发送关键级别通知（应该会发送）...")
 	err = manager.Send(criticalNotification)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "发送关键级别通知应该成功")
 
-	t.Log("✅ Integration test completed successfully")
-	t.Log("📬 Please check your email inbox:")
-	t.Log("   - You should NOT receive the INFO level message (filtered)")
-	t.Log("   - You should receive the WARNING level price alert")
-	t.Log("   - You should receive the CRITICAL level strategy signal")
+	t.Log("✅ 集成测试完成成功")
+	t.Log("📬 请检查您的邮箱：")
+	t.Log("   - 您不应该收到 INFO 级别的消息（已被过滤）")
+	t.Log("   - 您应该收到 WARNING 级别的价格警报")
+	t.Log("   - 您应该收到 CRITICAL 级别的策略信号")
 
 	// 关闭管理器
 	err = manager.Close()
-	assert.NoError(t, err)
+	assert.NoError(t, err, "关闭通知管理器应该成功")
 }
 
+// TestEmailSendWithTemplateIntegration 邮件模板集成测试
 func TestEmailSendWithTemplateIntegration(t *testing.T) {
-	// 初始化环境变量管理器
-	envFile := config.DetermineEnvFile()
-	if envFile == "" {
-		// 如果 DetermineEnvFile 没有找到文件，尝试手动构建路径
-		projectRoot := config.FindProjectRoot()
-		if projectRoot != "" {
-			envFile = filepath.Join(projectRoot, ".env.example")
-		} else {
-			envFile = ".env.example" // 最后的回退选项
-		}
-	}
-
-	t.Logf("Attempting to load env file: %s", envFile)
-	err := config.InitEnvManager(envFile)
-	if err != nil {
-		t.Logf("Warning: Failed to load env file %s: %v", envFile, err)
-		t.Logf("Will proceed with system environment variables only")
-	}
-
+	// 检查是否启用了邮件集成测试
 	if !config.IsIntegrationTestEnabled("EMAIL") {
-		t.Skip("Skipping integration test. Set EMAIL_INTEGRATION_TEST=1 to run.")
+		t.Skip("跳过集成测试。设置 EMAIL_INTEGRATION_TEST=1 来运行邮件测试。")
 		return
 	}
 
-	// 加载正常的配置文件
+	// 查找项目根目录
 	projectRoot := config.FindProjectRoot()
 	if projectRoot == "" {
-		t.Fatal("Could not find project root directory")
+		t.Fatal("找不到项目根目录")
 	}
 
+	// 加载示例配置文件，config 模块会自动处理环境变量展开
 	configPath := filepath.Join(projectRoot, "config.example.yaml")
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		t.Fatalf("Failed to load config from %s: %v", configPath, err)
+		t.Fatalf("从 %s 加载配置失败: %v", configPath, err)
 	}
 
-	// 确保邮件通知已启用
-	if !cfg.Notifiers.Email.Enabled {
-		// 在集成测试中强制启用邮件通知
-		cfg.Notifiers.Email.Enabled = true
-	}
-
+	// 在集成测试中强制启用邮件通知
+	cfg.Notifiers.Email.Enabled = true
 	emailConfig := &cfg.Notifiers.Email
 
 	// 自定义邮件模板
@@ -310,7 +251,7 @@ func TestEmailSendWithTemplateIntegration(t *testing.T) {
 
 	// 创建邮件通知器
 	notifier, err := NewEmailNotifier(emailConfig)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "创建邮件通知器应该成功")
 
 	// 创建测试通知
 	notification := &Notification{
@@ -330,14 +271,14 @@ func TestEmailSendWithTemplateIntegration(t *testing.T) {
 	}
 
 	// 发送测试邮件
-	t.Log("📧 Sending template test email...")
+	t.Log("📧 正在发送模板测试邮件...")
 	err = notifier.Send(notification)
-	assert.NoError(t, err)
+	assert.NoError(t, err, "发送模板测试邮件应该成功")
 
-	t.Log("✅ Template test email sent successfully")
-	t.Log("📬 Please check your email inbox to verify the template formatting")
+	t.Log("✅ 模板测试邮件发送成功")
+	t.Log("📬 请检查您的邮箱以确认模板格式化效果")
 
 	// 关闭通知器
 	err = notifier.Close()
-	assert.NoError(t, err)
+	assert.NoError(t, err, "关闭邮件通知器应该成功")
 }

@@ -5,9 +5,9 @@ import (
 	"crypto/tls"
 	"fmt"
 	"html/template"
+	"log"
 	"net"
 	"net/smtp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -137,11 +137,21 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 	// 发送邮件
 	addr := fmt.Sprintf("%s:%d", e.config.SMTP.Host, e.config.SMTP.Port)
 
+	var sendErr error
 	if e.config.SMTP.TLS {
-		return e.sendWithTLS(addr, msg)
+		sendErr = e.sendWithTLS(addr, msg)
 	} else {
-		return e.sendWithoutTLS(addr, msg)
+		sendErr = e.sendWithoutTLS(addr, msg)
 	}
+
+	if sendErr != nil {
+		return sendErr
+	}
+
+	// 发送成功，记录日志
+	log.Printf("📧 邮件发送成功: %s -> %v (主题: %s)", e.config.From, e.config.To, subject)
+
+	return nil
 }
 
 // prepareEmail 准备邮件内容
@@ -216,12 +226,15 @@ func (e *EmailNotifier) buildMessage(subject, body string) []byte {
 // sendWithTLS 使用 STARTTLS 发送邮件
 func (e *EmailNotifier) sendWithTLS(addr string, msg []byte) error {
 	// Gmail 等服务商在端口 587 使用 STARTTLS，而不是直接 TLS
-	// 先建立普通连接
-	conn, err := net.Dial("tcp", addr)
+	// 先建立普通连接，设置30秒超时
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 	defer conn.Close()
+
+	// 设置连接超时
+	conn.SetDeadline(time.Now().Add(60 * time.Second))
 
 	// 创建 SMTP 客户端
 	client, err := smtp.NewClient(conn, e.config.SMTP.Host)
@@ -301,19 +314,40 @@ func (e *EmailNotifier) TestConnection() error {
 		return fmt.Errorf("email notifier is disabled")
 	}
 
-	// 创建测试通知
-	testNotification := &Notification{
-		ID:        "test-" + strconv.FormatInt(time.Now().Unix(), 10),
-		Type:      TypeSystemAlert,
-		Level:     LevelInfo,
-		Title:     "TA Watcher - 邮件连接测试",
-		Message:   "这是一封测试邮件，用于验证邮件通知功能是否正常工作。",
-		Timestamp: time.Now(),
-		Data: map[string]interface{}{
-			"test_time": time.Now().Format("2006-01-02 15:04:05"),
-			"version":   "1.0.0",
-		},
+	// 快速连接测试，不发送实际邮件
+	addr := fmt.Sprintf("%s:%d", e.config.SMTP.Host, e.config.SMTP.Port)
+
+	// 建立连接测试，设置10秒超时
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+	if err != nil {
+		return fmt.Errorf("failed to connect to SMTP server: %w", err)
+	}
+	defer conn.Close()
+
+	// 设置连接超时
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	// 创建 SMTP 客户端进行基本握手
+	client, err := smtp.NewClient(conn, e.config.SMTP.Host)
+	if err != nil {
+		return fmt.Errorf("failed to create SMTP client: %w", err)
+	}
+	defer client.Quit()
+
+	// 如果使用TLS，测试TLS启动
+	if e.config.SMTP.TLS {
+		tlsConfig := &tls.Config{
+			ServerName: e.config.SMTP.Host,
+		}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return fmt.Errorf("failed to start TLS: %w", err)
+		}
 	}
 
-	return e.Send(testNotification)
+	// 测试认证（不发送实际邮件）
+	if err := client.Auth(e.auth); err != nil {
+		return fmt.Errorf("SMTP authentication failed: %w", err)
+	}
+
+	return nil
 }

@@ -196,7 +196,9 @@ func SortSymbolsByMarketCap(symbols []string, marketCaps map[string]float64) []s
 }
 
 // GenerateCrossRatePairs 基于市值生成交叉汇率对
-// 返回格式为 "SYMBOL1SYMBOL2" 的交易对，其中SYMBOL1市值较高
+// 返回格式为 "SYMBOL1SYMBOL2" 的交易对，遵循交易所约定：
+// 市值较高的币种作为报价货币（在后），市值较低的币种作为基础货币（在前）
+// 例如：ETHBTC 表示用BTC买ETH，符合主流交易所约定
 func GenerateCrossRatePairs(symbols []string, marketCaps map[string]float64, maxPairs int) []string {
 	if len(symbols) < 2 {
 		return []string{}
@@ -207,10 +209,10 @@ func GenerateCrossRatePairs(symbols []string, marketCaps map[string]float64, max
 
 	pairs := make([]string, 0)
 
-	// 生成市值较高币种对市值较低币种的交易对
+	// 生成符合交易所约定的交易对：市值低的在前（基础货币），市值高的在后（报价货币）
 	for i := 0; i < len(sortedSymbols) && len(pairs) < maxPairs; i++ {
 		for j := i + 1; j < len(sortedSymbols) && len(pairs) < maxPairs; j++ {
-			pair := sortedSymbols[i] + sortedSymbols[j] // 高市值在前
+			pair := sortedSymbols[j] + sortedSymbols[i] // 低市值+高市值，如ETHBTC
 			pairs = append(pairs, pair)
 		}
 	}

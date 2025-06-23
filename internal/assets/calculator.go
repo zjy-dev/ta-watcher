@@ -23,18 +23,19 @@ func NewRateCalculator(client binance.DataSource) *RateCalculator {
 }
 
 // CalculateRate 计算两个币种之间的汇率
-// 例如：CalculateRate("BTC", "ETH", "USDT") 计算 BTC/ETH 的汇率
+// 例如：CalculateRate("ETH", "BTC", "USDT") 计算 ETH/BTC 的汇率
+// 意思是：1 ETH = ? BTC（用BTC报价ETH）
 func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSymbol, bridgeCurrency string, interval string, limit int) ([]*binance.KlineData, error) {
 	log.Printf("计算 %s/%s 汇率，通过 %s 桥接", baseSymbol, quoteSymbol, bridgeCurrency)
 
-	// 获取基础币种对桥接货币的价格 (如 BTC/USDT)
+	// 获取基础币种对桥接货币的价格 (如 ETH/USDT)
 	basePair := baseSymbol + bridgeCurrency
 	baseKlines, err := rc.client.GetKlines(ctx, basePair, interval, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s klines: %w", basePair, err)
 	}
 
-	// 获取报价币种对桥接货币的价格 (如 ETH/USDT)
+	// 获取报价币种对桥接货币的价格 (如 BTC/USDT)
 	quotePair := quoteSymbol + bridgeCurrency
 	quoteKlines, err := rc.client.GetKlines(ctx, quotePair, interval, limit)
 	if err != nil {
@@ -52,7 +53,8 @@ func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSy
 	}
 
 	// 计算汇率 K线数据
-	rateKlines := make([]*binance.KlineData, minLength)
+	rateKlines := make([]*binance.KlineData, 0, minLength) // 改为可变长度
+	skippedCount := 0
 
 	for i := 0; i < minLength; i++ {
 		baseK := baseKlines[i]
@@ -64,14 +66,12 @@ func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSy
 			timeDiff = -timeDiff
 		}
 		if timeDiff > time.Minute { // 1分钟误差
-			log.Printf("警告: 时间戳不匹配 %s vs %s，跳过此数据点",
-				baseK.OpenTime.Format("2006-01-02 15:04:05"),
-				quoteK.OpenTime.Format("2006-01-02 15:04:05"))
-			continue
+			skippedCount++
+			continue // 静默跳过，避免太多警告
 		}
 
 		// 计算汇率: base/quote = (base/bridge) / (quote/bridge)
-		rateKlines[i] = &binance.KlineData{
+		rateKline := &binance.KlineData{
 			Symbol:    baseSymbol + quoteSymbol, // 生成的汇率对符号
 			Interval:  baseK.Interval,
 			OpenTime:  baseK.OpenTime,
@@ -82,22 +82,25 @@ func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSy
 			Close:     safeDiv(baseK.Close, quoteK.Close),
 			Volume:    0, // 计算的汇率对没有实际交易量
 		}
-	}
 
-	// 过滤掉无效的数据点
-	validKlines := make([]*binance.KlineData, 0, len(rateKlines))
-	for _, k := range rateKlines {
-		if k != nil && k.Open > 0 && k.Close > 0 {
-			validKlines = append(validKlines, k)
+		// 验证数据有效性
+		if rateKline.Open > 0 && rateKline.Close > 0 {
+			rateKlines = append(rateKlines, rateKline)
 		}
 	}
 
-	if len(validKlines) == 0 {
+	// 如果跳过太多数据点，记录一次汇总信息
+	if skippedCount > 0 {
+		log.Printf("计算 %s/%s 汇率时跳过 %d 个不匹配的数据点（可能因为币种上线时间不同）",
+			baseSymbol, quoteSymbol, skippedCount)
+	}
+
+	if len(rateKlines) == 0 {
 		return nil, fmt.Errorf("no valid rate data could be calculated")
 	}
 
-	log.Printf("成功计算 %s/%s 汇率，生成 %d 个数据点", baseSymbol, quoteSymbol, len(validKlines))
-	return validKlines, nil
+	log.Printf("成功计算 %s/%s 汇率，生成 %d 个数据点", baseSymbol, quoteSymbol, len(rateKlines))
+	return rateKlines, nil
 }
 
 // safeDiv 安全除法，避免除零

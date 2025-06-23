@@ -133,18 +133,18 @@ func TestGenerateCrossRatePairs(t *testing.T) {
 		symbols := []string{"BTC", "ETH", "BNB", "ADA"}
 		pairs := GenerateCrossRatePairs(symbols, marketCaps, 10)
 
-		// 应该生成高市值/低市值的对
-		assert.Contains(t, pairs, "BTCETH") // BTC/ETH
-		assert.Contains(t, pairs, "BTCBNB") // BTC/BNB
-		assert.Contains(t, pairs, "ETHBNB") // ETH/BNB
+		// 应该生成 低市值/高市值 的对，符合交易所约定
+		assert.Contains(t, pairs, "ETHBTC") // ETH/BTC (ETH用BTC报价)
+		assert.Contains(t, pairs, "BNBBTC") // BNB/BTC (BNB用BTC报价)
+		assert.Contains(t, pairs, "BNBETH") // BNB/ETH (BNB用ETH报价)
 
-		// 验证所有对都是高市值在前
+		// 验证所有对都是低市值在前，高市值在后（符合交易所约定）
 		for _, pair := range pairs {
-			if pair == "BTCETH" {
-				assert.Greater(t, marketCaps["BTC"], marketCaps["ETH"])
+			if pair == "ETHBTC" {
+				assert.Greater(t, marketCaps["BTC"], marketCaps["ETH"]) // BTC市值 > ETH市值
 			}
-			if pair == "ETHADA" {
-				assert.Greater(t, marketCaps["ETH"], marketCaps["ADA"])
+			if pair == "ADAETH" {
+				assert.Greater(t, marketCaps["ETH"], marketCaps["ADA"]) // ETH市值 > ADA市值
 			}
 		}
 	})

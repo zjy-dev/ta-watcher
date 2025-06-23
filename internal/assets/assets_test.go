@@ -106,8 +106,8 @@ func TestValidator_ValidateAssets(t *testing.T) {
 	mockClient.On("GetKlines", ctx, "INVALIDUSDT", "1d", 1).Return([]*binance.KlineData{},
 		assert.AnError)
 
-	// 新增：交叉汇率对 BTC/ETH 不存在（将被标记为计算汇率对）
-	mockClient.On("GetKlines", ctx, "BTCETH", "1d", 1).Return([]*binance.KlineData{},
+	// 新增：交叉汇率对 ETH/BTC 不存在（将被标记为计算汇率对）
+	mockClient.On("GetKlines", ctx, "ETHBTC", "1d", 1).Return([]*binance.KlineData{},
 		assert.AnError)
 
 	// 执行验证
@@ -124,7 +124,7 @@ func TestValidator_ValidateAssets(t *testing.T) {
 	assert.Equal(t, []string{"1d", "1w"}, result.SupportedTimeframes)
 
 	// 验证生成了计算汇率对
-	assert.Contains(t, result.CalculatedPairs, "BTCETH")
+	assert.Contains(t, result.CalculatedPairs, "ETHBTC")
 
 	// 验证摘要
 	summary := result.Summary()
@@ -198,20 +198,20 @@ func TestRateCalculator_CalculateRate(t *testing.T) {
 	mockClient.On("GetKlines", ctx, "BTCUSDT", "1h", 1).Return(btcKlines, nil)
 	mockClient.On("GetKlines", ctx, "ETHUSDT", "1h", 1).Return(ethKlines, nil)
 
-	// 执行汇率计算
-	result, err := calculator.CalculateRate(ctx, "BTC", "ETH", "USDT", "1h", 1)
+	// 执行汇率计算 - 注意：ETH在前，BTC在后，符合交易所约定（ETHBTC）
+	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", "1h", 1)
 
 	// 验证结果
 	require.NoError(t, err)
 	require.Len(t, result, 1)
 
 	rate := result[0]
-	assert.Equal(t, "BTCETH", rate.Symbol)
+	assert.Equal(t, "ETHBTC", rate.Symbol)
 	assert.Equal(t, baseTime, rate.OpenTime)
 
-	// 验证汇率计算: BTC/ETH = (BTC/USDT) / (ETH/USDT)
-	expectedOpen := 50000.0 / 2500.0  // 20.0
-	expectedClose := 51000.0 / 2550.0 // 约20.0
+	// 验证汇率计算: ETH/BTC = (ETH/USDT) / (BTC/USDT)
+	expectedOpen := 2500.0 / 50000.0  // 0.05
+	expectedClose := 2550.0 / 51000.0 // 约0.05
 
 	assert.InDelta(t, expectedOpen, rate.Open, 0.01)
 	assert.InDelta(t, expectedClose, rate.Close, 0.01)

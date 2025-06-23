@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"ta-watcher/internal/assets"
+	"ta-watcher/internal/binance"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/watcher"
 )
@@ -59,23 +61,58 @@ func run() error {
 	log.Printf("配置文件: %s", *configPath)
 	log.Printf("监控间隔: %v", cfg.Watcher.Interval)
 	log.Printf("工作协程: %d", cfg.Watcher.MaxWorkers)
-	log.Printf("监控资产: %v", cfg.Assets)
+	log.Printf("配置的币种: %v", cfg.Assets.Symbols)
+	log.Printf("监控时间框架: %v", cfg.Assets.Timeframes)
 
-	// 创建 Watcher 实例
-	w, err := watcher.New(cfg)
+	// 创建 Binance 客户端用于预检查
+	log.Println("正在连接 Binance API...")
+	binanceClient, err := binance.NewClient(&cfg.Binance)
+	if err != nil {
+		return fmt.Errorf("Binance 客户端创建失败: %w", err)
+	}
+
+	// 预检查：验证所有配置的资产
+	log.Println("开始资产预检查...")
+	validator := assets.NewValidator(binanceClient, &cfg.Assets)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	validationResult, err := validator.ValidateAssets(ctx)
+	if err != nil {
+		return fmt.Errorf("资产验证失败: %w", err)
+	}
+
+	// 显示验证结果
+	log.Println(validationResult.Summary())
+
+	// 如果有缺失的币种，给出警告但继续运行
+	if len(validationResult.MissingSymbols) > 0 {
+		log.Printf("警告: 以下币种将被跳过: %v", validationResult.MissingSymbols)
+	}
+
+	// 确保至少有一个有效币种
+	if len(validationResult.ValidSymbols) == 0 {
+		return fmt.Errorf("没有找到任何有效的监控币种，请检查配置")
+	}
+
+	log.Printf("资产预检查完成，将监控 %d 个币种", len(validationResult.ValidSymbols))
+
+	// 创建 Watcher 实例，并传入验证结果
+	w, err := watcher.NewWithValidationResult(cfg, validationResult)
 	if err != nil {
 		return fmt.Errorf("Watcher 创建失败: %w", err)
 	}
 
 	// 设置信号处理
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// 启动 Watcher
-	if err := w.Start(ctx); err != nil {
+	if err := w.Start(ctx2); err != nil {
 		return fmt.Errorf("Watcher 启动失败: %w", err)
 	}
 

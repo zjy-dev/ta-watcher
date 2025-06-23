@@ -18,7 +18,12 @@ func TestNew(t *testing.T) {
 		Watcher: config.WatcherConfig{
 			Interval: time.Second,
 		},
-		Assets: []string{"BTCUSDT"},
+		Assets: config.AssetsConfig{
+			Symbols:                 []string{"BTC"},
+			Timeframes:              []string{"1d"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	w, err := New(cfg)
@@ -49,7 +54,12 @@ func TestWatcher_StartStop(t *testing.T) {
 		Watcher: config.WatcherConfig{
 			Interval: 100 * time.Millisecond,
 		},
-		Assets: []string{"BTCUSDT"},
+		Assets: config.AssetsConfig{
+			Symbols:                 []string{"BTC"},
+			Timeframes:              []string{"1d"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	w, err := New(cfg)
@@ -94,7 +104,12 @@ func TestWatcher_GetHealth(t *testing.T) {
 		Watcher: config.WatcherConfig{
 			Interval: time.Second,
 		},
-		Assets: []string{"BTCUSDT"},
+		Assets: config.AssetsConfig{
+			Symbols:                 []string{"BTC"},
+			Timeframes:              []string{"1d"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	w, err := New(cfg)
@@ -122,7 +137,12 @@ func TestWatcher_GetStatistics(t *testing.T) {
 		Watcher: config.WatcherConfig{
 			Interval: time.Second,
 		},
-		Assets: []string{"BTCUSDT"},
+		Assets: config.AssetsConfig{
+			Symbols:                 []string{"BTC"},
+			Timeframes:              []string{"1d"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	w, err := New(cfg)

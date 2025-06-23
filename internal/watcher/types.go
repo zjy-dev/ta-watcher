@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"ta-watcher/internal/assets"
 	"ta-watcher/internal/binance"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/notifiers"
@@ -13,10 +14,11 @@ import (
 
 // Watcher 监控服务
 type Watcher struct {
-	config     *config.Config
-	dataSource binance.DataSource
-	notifier   *notifiers.Manager
-	strategy   *strategy.Manager
+	config           *config.Config
+	dataSource       binance.DataSource
+	notifier         *notifiers.Manager
+	strategy         *strategy.Manager
+	validationResult *assets.ValidationResult // 资产验证结果
 
 	running bool
 	ctx     context.Context

@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"ta-watcher/internal/assets"
 	"ta-watcher/internal/binance"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/notifiers"
@@ -31,12 +32,30 @@ func New(cfg *config.Config) (*Watcher, error) {
 	strategyManager := strategy.NewManager(strategy.DefaultManagerConfig())
 
 	return &Watcher{
-		config:     cfg,
-		dataSource: dataSource,
-		notifier:   notifier,
-		strategy:   strategyManager,
-		stats:      newStatistics(),
+		config:           cfg,
+		dataSource:       dataSource,
+		notifier:         notifier,
+		strategy:         strategyManager,
+		validationResult: nil, // 需要通过 SetValidationResult 设置
+		stats:            newStatistics(),
 	}, nil
+}
+
+// NewWithValidationResult 创建带有验证结果的 Watcher 实例
+func NewWithValidationResult(cfg *config.Config, validationResult *assets.ValidationResult) (*Watcher, error) {
+	watcher, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	watcher.validationResult = validationResult
+	return watcher, nil
+}
+
+// SetValidationResult 设置验证结果
+func (w *Watcher) SetValidationResult(result *assets.ValidationResult) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.validationResult = result
 }
 
 // Start 启动监控服务
@@ -151,14 +170,42 @@ func (w *Watcher) runMonitorCycle() {
 		return
 	}
 
-	// 处理每个资产
-	for _, symbol := range w.config.Assets {
-		w.processAsset(symbol, strategies)
+	// 如果有验证结果，使用验证的交易对；否则使用传统方法
+	if w.validationResult != nil {
+		w.runValidatedMonitorCycle(strategies)
+	} else {
+		w.runLegacyMonitorCycle(strategies)
 	}
 }
 
-// processAsset 处理单个资产
-func (w *Watcher) processAsset(symbol string, strategies []string) {
+// runValidatedMonitorCycle 使用验证结果运行监控周期
+func (w *Watcher) runValidatedMonitorCycle(strategies []string) {
+	allPairs := w.validationResult.GetAllMonitoringPairs()
+
+	log.Printf("运行监控周期，监控 %d 个交易对", len(allPairs))
+
+	// 处理每个验证的交易对的每个时间框架
+	for _, pair := range allPairs {
+		for _, timeframe := range w.config.Assets.Timeframes {
+			w.processAssetTimeframe(pair, timeframe, strategies)
+		}
+	}
+}
+
+// runLegacyMonitorCycle 使用传统方法运行监控周期（向后兼容）
+func (w *Watcher) runLegacyMonitorCycle(strategies []string) {
+	// 处理每个资产的每个时间框架
+	for _, symbol := range w.config.Assets.Symbols {
+		for _, timeframe := range w.config.Assets.Timeframes {
+			// 构建交易对（币种 + 基准货币）
+			pair := symbol + w.config.Assets.BaseCurrency
+			w.processAssetTimeframe(pair, timeframe, strategies)
+		}
+	}
+}
+
+// processAssetTimeframe 处理单个资产的特定时间框架
+func (w *Watcher) processAssetTimeframe(pair, timeframe string, strategies []string) {
 	w.stats.mu.Lock()
 	w.stats.TotalTasks++
 	w.stats.mu.Unlock()
@@ -167,9 +214,18 @@ func (w *Watcher) processAsset(symbol string, strategies []string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	klines, err := w.dataSource.GetKlines(ctx, symbol, "1h", 100)
+	var klines []*binance.KlineData
+	var err error
+
+	// 检查是否为计算汇率对
+	if w.validationResult != nil && w.isCalculatedPair(pair) {
+		klines, err = w.getCalculatedKlines(ctx, pair, timeframe, 100)
+	} else {
+		klines, err = w.dataSource.GetKlines(ctx, pair, timeframe, 100)
+	}
+
 	if err != nil {
-		log.Printf("Failed to get klines for %s: %v", symbol, err)
+		log.Printf("Failed to get klines for %s (%s): %v", pair, timeframe, err)
 		w.stats.mu.Lock()
 		w.stats.FailedTasks++
 		w.stats.mu.Unlock()
@@ -191,18 +247,18 @@ func (w *Watcher) processAsset(symbol string, strategies []string) {
 		}
 
 		result, err := strategyObj.Evaluate(&strategy.MarketData{
-			Symbol:    symbol,
-			Timeframe: strategy.Timeframe1h,
+			Symbol:    pair,
+			Timeframe: strategy.Timeframe(timeframe),
 			Klines:    klineData,
 		})
 		if err != nil {
-			log.Printf("Strategy %s failed for %s: %v", strategyName, symbol, err)
+			log.Printf("Strategy %s failed for %s (%s): %v", strategyName, pair, timeframe, err)
 			continue
 		}
 
 		// 如果有信号，发送通知
 		if result != nil && result.Signal != strategy.SignalHold {
-			w.sendNotification(symbol, strategyName, result)
+			w.sendNotification(pair, strategyName, result)
 		}
 	}
 
@@ -210,6 +266,56 @@ func (w *Watcher) processAsset(symbol string, strategies []string) {
 	w.stats.CompletedTasks++
 	w.stats.LastUpdate = time.Now()
 	w.stats.mu.Unlock()
+}
+
+// isCalculatedPair 检查是否为计算汇率对
+func (w *Watcher) isCalculatedPair(pair string) bool {
+	if w.validationResult == nil {
+		return false
+	}
+
+	for _, calculatedPair := range w.validationResult.CalculatedPairs {
+		if calculatedPair == pair {
+			return true
+		}
+	}
+	return false
+}
+
+// getCalculatedKlines 获取计算的K线数据
+func (w *Watcher) getCalculatedKlines(ctx context.Context, pair, timeframe string, limit int) ([]*binance.KlineData, error) {
+	// 解析交易对：例如 "BTCETH" -> "BTC", "ETH"
+	baseSymbol, quoteSymbol := w.parseCrossRatePair(pair)
+	if baseSymbol == "" || quoteSymbol == "" {
+		return nil, fmt.Errorf("invalid cross rate pair: %s", pair)
+	}
+
+	// 使用汇率计算器
+	calculator := assets.NewRateCalculator(w.dataSource)
+	return calculator.CalculateRate(ctx, baseSymbol, quoteSymbol, w.config.Assets.BaseCurrency, timeframe, limit)
+}
+
+// parseCrossRatePair 解析交叉汇率对
+// 例如 "BTCETH" -> ("BTC", "ETH")
+func (w *Watcher) parseCrossRatePair(pair string) (string, string) {
+	// 这是一个简化的解析器，假设按市值排序的交易对
+	// 在实际实现中，可能需要更复杂的逻辑来正确分割
+
+	// 尝试匹配已知的币种
+	validSymbols := w.config.Assets.Symbols
+
+	for _, symbol1 := range validSymbols {
+		if len(pair) > len(symbol1) && pair[:len(symbol1)] == symbol1 {
+			remaining := pair[len(symbol1):]
+			for _, symbol2 := range validSymbols {
+				if remaining == symbol2 {
+					return symbol1, symbol2
+				}
+			}
+		}
+	}
+
+	return "", ""
 }
 
 // sendNotification 发送通知

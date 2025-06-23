@@ -45,9 +45,19 @@ func DefaultConfig() *Config {
 				Template: "Default wechat template",
 			},
 		},
-		Assets: []string{
-			"BTCUSDT",
-			"ETHUSDT",
+		Assets: AssetsConfig{
+			Symbols: []string{
+				"BTC",
+				"ETH",
+				"BNB",
+			},
+			Timeframes: []string{
+				"1d", // 日线
+				"1w", // 周线
+				"1M", // 月线
+			},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: 1 * time.Hour,
 		},
 	}
 }
@@ -159,9 +169,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("notifiers config: %w", err)
 	}
 
-	// 验证资产列表
-	if len(c.Assets) == 0 {
-		return fmt.Errorf("assets list cannot be empty")
+	// 验证资产配置
+	if err := c.Assets.Validate(); err != nil {
+		return fmt.Errorf("invalid assets config: %w", err)
 	}
 
 	return nil
@@ -264,5 +274,43 @@ func (c *WechatConfig) Validate() error {
 	if c.WebhookURL == "" {
 		return fmt.Errorf("webhook_url cannot be empty")
 	}
+	return nil
+}
+
+// Validate 验证资产配置
+func (a *AssetsConfig) Validate() error {
+	// 验证加密货币列表
+	if len(a.Symbols) == 0 {
+		return fmt.Errorf("symbols list cannot be empty")
+	}
+
+	// 验证时间框架
+	if len(a.Timeframes) == 0 {
+		return fmt.Errorf("timeframes list cannot be empty")
+	}
+
+	// 验证支持的时间框架
+	validTimeframes := map[string]bool{
+		"1m": true, "3m": true, "5m": true, "15m": true, "30m": true,
+		"1h": true, "2h": true, "4h": true, "6h": true, "8h": true, "12h": true,
+		"1d": true, "3d": true, "1w": true, "1M": true,
+	}
+
+	for _, tf := range a.Timeframes {
+		if !validTimeframes[tf] {
+			return fmt.Errorf("invalid timeframe: %s", tf)
+		}
+	}
+
+	// 验证基准货币
+	if a.BaseCurrency == "" {
+		return fmt.Errorf("base_currency cannot be empty")
+	}
+
+	// 验证市值更新间隔
+	if a.MarketCapUpdateInterval <= 0 {
+		return fmt.Errorf("market_cap_update_interval must be positive")
+	}
+
 	return nil
 }

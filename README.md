@@ -2,6 +2,17 @@
 
 一个简洁、高效的加密货币技术分析自动监控系统，实时监控交易信号并发送通知。
 
+## ✨ 最新功能
+
+### 🚀 v1.0.0 - 市值驱动的交叉汇率监控
+
+- **智能资产验证**: 启动前自动验证所有配置的资产和交易对
+- **市值查询集成**: 实时获取加密货币市值数据，支持智能排序
+- **交叉汇率计算**: 自动生成并监控基于市值的交叉汇率对（如BTC/ETH）
+- **多时间框架支持**: 同时监控日线、周线、月线等多个时间维度
+- **错误提前发现**: 在监控开始前识别缺失的交易对和配置错误
+- **灵活配置**: 支持配置加密货币符号列表，自动构建监控对
+
 ## 🎯 项目特点
 
 - **极简设计**: 删除了复杂的中间层，watcher 直接调用 strategy 接口
@@ -165,9 +176,22 @@ type Config struct {
     Binance   BinanceConfig   // 币安配置
     Watcher   WatcherConfig   // 监控配置  
     Notifiers NotifiersConfig // 通知配置
-    Assets    []string        // 监控的交易对
+    Assets    AssetsConfig    // 资产监控配置
+}
+
+type AssetsConfig struct {
+    Symbols                 []string      // 要监控的加密货币列表
+    Timeframes              []string      // 支持的时间框架
+    BaseCurrency            string        // 基准货币（用于汇率计算）
+    MarketCapUpdateInterval time.Duration // 市值数据更新间隔
 }
 ```
+
+**新特性说明**:
+- **符号化配置**: 只需配置币种符号（如"BTC"），系统自动构建监控对
+- **交叉汇率**: 自动生成并监控币种间汇率（如BTC/ETH）
+- **市值驱动**: 基于实时市值数据智能排序和配置交叉汇率对
+- **多时间框架**: 同时监控多个时间维度，全面把握市场动态
 
 ## 🚀 快速开始
 
@@ -187,19 +211,34 @@ cp config.example.yaml config.yaml
 配置示例:
 ```yaml
 watcher:
-  interval: 1m          # 监控间隔
-  max_workers: 5        # 最大并发数
+  interval: 5m          # 监控间隔
+  max_workers: 10       # 最大并发数
   
-assets:                 # 监控的交易对
-  - "BTCUSDT"
-  - "ETHUSDT"
+assets:                 # 智能资产配置
+  symbols:              # 要监控的加密货币
+    - "BTC"             # 比特币
+    - "ETH"             # 以太坊
+    - "BNB"             # 币安币
+  timeframes:           # 监控的时间框架
+    - "1d"              # 日线
+    - "1w"              # 周线
+    - "1M"              # 月线
+  base_currency: "USDT" # 基准货币
+  market_cap_update_interval: 1h # 市值更新间隔
 
 notifiers:
   email:
     enabled: true
-    smtp_host: "smtp.gmail.com"
-    # ... 其他邮件配置
+    smtp:
+      host: "smtp.gmail.com"
+      # ... 其他邮件配置
 ```
+
+**配置说明**:
+- 系统将自动监控 `BTCUSDT`、`ETHUSDT`、`BNBUSDT` 等基础对
+- 根据市值数据生成交叉汇率对，如 `BTCETH`（BTC/ETH汇率）
+- 支持多时间框架同时监控，全面分析市场趋势
+- 启动时自动验证所有配置的资产和交易对
 
 ### 3. 运行
 

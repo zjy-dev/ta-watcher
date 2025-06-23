@@ -28,9 +28,12 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, 587, config.Notifiers.Email.SMTP.Port)
 	assert.True(t, config.Notifiers.Email.SMTP.TLS)
 
-	assert.Len(t, config.Assets, 2)
-	assert.Contains(t, config.Assets, "BTCUSDT")
-	assert.Contains(t, config.Assets, "ETHUSDT")
+	assert.Len(t, config.Assets.Symbols, 3)
+	assert.Contains(t, config.Assets.Symbols, "BTC")
+	assert.Contains(t, config.Assets.Symbols, "ETH")
+	assert.Contains(t, config.Assets.Symbols, "BNB")
+	assert.Equal(t, "USDT", config.Assets.BaseCurrency)
+	assert.Len(t, config.Assets.Timeframes, 3)
 }
 
 func TestConfigValidation(t *testing.T) {
@@ -79,11 +82,11 @@ func TestConfigValidation(t *testing.T) {
 			name: "empty assets",
 			config: func() *Config {
 				c := DefaultConfig()
-				c.Assets = []string{}
+				c.Assets.Symbols = []string{}
 				return c
 			}(),
 			wantErr: true,
-			errMsg:  "assets list cannot be empty",
+			errMsg:  "symbols list cannot be empty",
 		},
 	}
 
@@ -267,7 +270,7 @@ func TestLoadConfigFileNotFound(t *testing.T) {
 
 func TestSaveConfigInvalidConfig(t *testing.T) {
 	invalidConfig := DefaultConfig()
-	invalidConfig.Assets = []string{} // 使配置无效
+	invalidConfig.Assets.Symbols = []string{} // 使配置无效
 
 	tmpFile, err := os.CreateTemp("", "config_test_*.yaml")
 	require.NoError(t, err)

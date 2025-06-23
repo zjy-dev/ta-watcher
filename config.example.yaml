@@ -47,13 +47,20 @@ notifiers:
     webhook_url: "${WECHAT_WEBHOOK_URL}"  # 企业微信机器人Webhook URL（从环境变量获取）
     template: ""                    # 消息模板（留空使用默认）
 
-# 监控资产列表
+# 监控资产配置
 assets:
-  - "BTCUSDT"                       # 比特币/USDT
-  - "ETHUSDT"                       # 以太坊/USDT
-  - "BNBUSDT"                       # 币安币/USDT
-  - "ADAUSDT"                       # 卡尔达诺/USDT
-  - "SOLUSDT"                       # Solana/USDT
+  symbols:                          # 要监控的加密货币列表
+    - "BTC"                         # 比特币
+    - "ETH"                         # 以太坊
+    - "BNB"                         # 币安币
+    - "ADA"                         # 卡尔达诺
+    - "SOL"                         # Solana
+  timeframes:                       # 监控的时间框架
+    - "1d"                          # 日线
+    - "1w"                          # 周线
+    - "1M"                          # 月线
+  base_currency: "USDT"             # 基准货币
+  market_cap_update_interval: 1h    # 市值数据更新间隔
 
 # 注意：策略现在完全由 Go 代码定义，不再需要配置文件设置
 # 请查看 internal/strategy/ 目录下的内置策略

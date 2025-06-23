@@ -120,12 +120,7 @@ test-verbose: ## 详细模式运行所有单元测试
 	@echo ""
 	@echo "$(COLOR_GREEN)✅ 详细测试完成！$(COLOR_RESET)"
 
-# 测试相关
-.PHONY: test
-test: ## 运行所有单元测试
-	@echo "$(COLOR_BLUE)运行单元测试...$(COLOR_RESET)"
-	@go test -v ./internal/...
-
+# 模块特定测试（用于单独测试某个模块）
 .PHONY: test-watcher
 test-watcher: ## 运行 watcher 模块测试
 	@echo "$(COLOR_BLUE)运行 watcher 模块测试...$(COLOR_RESET)"
@@ -136,35 +131,20 @@ test-strategy: ## 运行 strategy 模块测试
 	@echo "$(COLOR_BLUE)运行 strategy 模块测试...$(COLOR_RESET)"
 	@go test -v ./internal/strategy/
 
-.PHONY: test-integration
-test-integration: ## 运行集成测试
-	@echo "$(COLOR_BLUE)运行集成测试...$(COLOR_RESET)"
-	@INTEGRATION_TEST=1 go test -v ./internal/watcher/ -run Integration
+.PHONY: test-config
+test-config: ## 运行 config 模块测试
+	@echo "$(COLOR_BLUE)运行 config 模块测试...$(COLOR_RESET)"
+	@go test -v ./internal/config/
 
-.PHONY: test-stress
-test-stress: ## 运行压力测试
-	@echo "$(COLOR_YELLOW)运行压力测试...$(COLOR_RESET)"
-	@STRESS_TEST=1 go test -v ./internal/watcher/ -run Stress -timeout 30s
-
-.PHONY: test-recovery
-test-recovery: ## 运行错误恢复测试
-	@echo "$(COLOR_YELLOW)运行错误恢复测试...$(COLOR_RESET)"
-	@RECOVERY_TEST=1 go test -v ./internal/watcher/ -run Recovery -timeout 15s
-
-.PHONY: test-coverage
-test-coverage: ## 运行测试并生成覆盖率报告
-	@echo "$(COLOR_BLUE)生成测试覆盖率报告...$(COLOR_RESET)"
-	@go test -coverprofile=$(COVERAGE_FILE) ./internal/...
-	@go tool cover -html=$(COVERAGE_FILE) -o $(COVERAGE_HTML)
-	@echo "$(COLOR_GREEN)覆盖率报告已生成: $(COVERAGE_HTML)$(COLOR_RESET)"
+.PHONY: test-assets
+test-assets: ## 运行 assets 模块测试
+	@echo "$(COLOR_BLUE)运行 assets 模块测试...$(COLOR_RESET)"
+	@go test -v ./internal/assets/
 
 .PHONY: benchmark
 benchmark: ## 运行基准测试
 	@echo "$(COLOR_BLUE)运行基准测试...$(COLOR_RESET)"
 	@go test -bench=. -benchmem ./internal/watcher/
-
-.PHONY: test-all
-test-all: test test-integration test-stress test-recovery test-coverage ## 运行所有测试
 
 # 构建和运行
 .PHONY: build

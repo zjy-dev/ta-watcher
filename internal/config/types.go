@@ -16,7 +16,22 @@ type Config struct {
 	Notifiers NotifiersConfig `yaml:"notifiers"`
 
 	// 资产配置
-	Assets []string `yaml:"assets"`
+	Assets AssetsConfig `yaml:"assets"`
+}
+
+// AssetsConfig 资产配置
+type AssetsConfig struct {
+	// 要监控的加密货币列表
+	Symbols []string `yaml:"symbols"`
+
+	// 支持的时间框架
+	Timeframes []string `yaml:"timeframes"`
+
+	// 基准货币（用于汇率计算）
+	BaseCurrency string `yaml:"base_currency"`
+
+	// 市值数据更新间隔
+	MarketCapUpdateInterval time.Duration `yaml:"market_cap_update_interval"`
 }
 
 // BinanceConfig Binance 配置

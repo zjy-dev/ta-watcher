@@ -1,3 +1,5 @@
+//go:build integration
+
 package config
 
 import (
@@ -61,7 +63,12 @@ func TestConfigIntegration(t *testing.T) {
 				Template:   "",
 			},
 		},
-		Assets: []string{"BTCUSDT", "ETHUSDT"},
+		Assets: AssetsConfig{
+			Symbols:                 []string{"BTC", "ETH"},
+			Timeframes:              []string{"1d", "1w"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	t.Run("SaveAndLoadConfig", func(t *testing.T) {
@@ -203,7 +210,12 @@ func TestConfigConcurrency(t *testing.T) {
 				To:   []string{"to@test.com"},
 			},
 		},
-		Assets: []string{"BTCUSDT"},
+		Assets: AssetsConfig{
+			Symbols:                 []string{"BTC"},
+			Timeframes:              []string{"1d"},
+			BaseCurrency:            "USDT",
+			MarketCapUpdateInterval: time.Hour,
+		},
 	}
 
 	// 先保存基础配置

@@ -204,8 +204,14 @@ watcher:
   enable_metrics: true
 
 assets:
-  - "BTCUSDT"
-  - "ETHUSDT"
+  symbols:
+    - "BTC"
+    - "ETH"
+  timeframes:
+    - "1d"
+    - "1w"
+  base_currency: "USDT"
+  market_cap_update_interval: 1h
 `
 
 	// 创建临时配置文件

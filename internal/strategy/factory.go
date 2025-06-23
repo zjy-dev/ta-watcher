@@ -73,50 +73,50 @@ func (f *Factory) registerDefaultPresets() {
 
 	// 组合策略预设
 	f.presets["balanced_combo"] = func() Strategy {
-		combo := NewMultiStrategy("平衡组合", "RSI+MA+MACD平衡组合策略", CombineWeightedAverage)
-		combo.AddSubStrategy(NewRSIStrategy(14, 70, 30), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(12, 26, indicators.EMA), 1.0)
-		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9), 1.0)
+		combo := NewMultiStrategy("平衡组合", "RSI+MA+MACD平衡组合策略")
+		combo.AddSubStrategy(NewRSIStrategy(14, 70, 30))
+		combo.AddSubStrategy(NewMACrossStrategy(12, 26, indicators.EMA))
+		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9))
 		return combo
 	}
 
 	f.presets["consensus_combo"] = func() Strategy {
-		combo := NewMultiStrategy("共识组合", "多策略共识决策", CombineConsensus)
-		combo.AddSubStrategy(NewRSIStrategy(14, 70, 30), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(5, 20, indicators.SMA), 1.0)
-		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9), 1.0)
+		combo := NewMultiStrategy("共识组合", "多策略共识决策")
+		combo.AddSubStrategy(NewRSIStrategy(14, 70, 30))
+		combo.AddSubStrategy(NewMACrossStrategy(5, 20, indicators.SMA))
+		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9))
 		return combo
 	}
 
 	f.presets["scalping_combo"] = func() Strategy {
-		combo := NewMultiStrategy("短线组合", "快速短线交易策略", CombineStrongest)
-		combo.AddSubStrategy(NewRSIStrategy(7, 65, 35), 1.5)
-		combo.AddSubStrategy(NewMACrossStrategy(5, 10, indicators.EMA), 1.0)
-		combo.AddSubStrategy(NewMACDStrategy(6, 13, 5), 1.2)
+		combo := NewMultiStrategy("短线组合", "快速短线交易策略")
+		combo.AddSubStrategy(NewRSIStrategy(7, 65, 35))
+		combo.AddSubStrategy(NewMACrossStrategy(5, 10, indicators.EMA))
+		combo.AddSubStrategy(NewMACDStrategy(6, 13, 5))
 		return combo
 	}
 
 	f.presets["weekly_combo"] = func() Strategy {
-		combo := NewMultiStrategy("周线组合", "适合周线级别的策略组合", CombineWeightedAverage)
-		combo.AddSubStrategy(NewRSIStrategy(14, 80, 20), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(10, 30, indicators.EMA), 1.5)
-		combo.AddSubStrategy(NewMACDStrategy(36, 72, 24), 1.2)
+		combo := NewMultiStrategy("周线组合", "适合周线级别的策略组合")
+		combo.AddSubStrategy(NewRSIStrategy(14, 80, 20))
+		combo.AddSubStrategy(NewMACrossStrategy(10, 30, indicators.EMA))
+		combo.AddSubStrategy(NewMACDStrategy(36, 72, 24))
 		return combo
 	}
 
 	f.presets["monthly_combo"] = func() Strategy {
-		combo := NewMultiStrategy("月线组合", "适合月线级别的价值投资策略", CombineConsensus)
-		combo.AddSubStrategy(NewRSIStrategy(14, 85, 15), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(12, 36, indicators.SMA), 2.0)
-		combo.AddSubStrategy(NewMACDStrategy(60, 120, 36), 1.0)
+		combo := NewMultiStrategy("月线组合", "适合月线级别的价值投资策略")
+		combo.AddSubStrategy(NewRSIStrategy(14, 85, 15))
+		combo.AddSubStrategy(NewMACrossStrategy(12, 36, indicators.SMA))
+		combo.AddSubStrategy(NewMACDStrategy(60, 120, 36))
 		return combo
 	}
 
 	f.presets["trend_following"] = func() Strategy {
-		combo := NewMultiStrategy("趋势跟踪", "强趋势跟踪策略，适合中长期", CombineWeightedAverage)
-		combo.AddSubStrategy(NewRSIStrategy(21, 75, 25), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(50, 200, indicators.SMA), 2.5) // 经典趋势线
-		combo.AddSubStrategy(NewMACDStrategy(26, 52, 18), 1.5)
+		combo := NewMultiStrategy("趋势跟踪", "强趋势跟踪策略，适合中长期")
+		combo.AddSubStrategy(NewRSIStrategy(21, 75, 25))
+		combo.AddSubStrategy(NewMACrossStrategy(50, 200, indicators.SMA)) // 经典趋势线
+		combo.AddSubStrategy(NewMACDStrategy(26, 52, 18))
 		return combo
 	}
 }
@@ -238,7 +238,6 @@ func (f *Factory) createMACDStrategy(params ...interface{}) (Strategy, error) {
 func (f *Factory) createMultiStrategy(params ...interface{}) (Strategy, error) {
 	name := "自定义组合"
 	description := "自定义多策略组合"
-	method := CombineWeightedAverage
 
 	if len(params) >= 1 {
 		if n, ok := params[0].(string); ok {
@@ -250,13 +249,8 @@ func (f *Factory) createMultiStrategy(params ...interface{}) (Strategy, error) {
 			description = d
 		}
 	}
-	if len(params) >= 3 {
-		if m, ok := params[2].(CombineMethod); ok {
-			method = m
-		}
-	}
 
-	return NewMultiStrategy(name, description, method), nil
+	return NewMultiStrategy(name, description), nil
 }
 
 // ListPresets 列出所有预设策略
@@ -328,26 +322,26 @@ func (f *Factory) CreateRecommendedStrategy(timeframe Timeframe) (Strategy, erro
 
 	case Timeframe6h, Timeframe12h, Timeframe1d:
 		// 中长线时间框架，使用稳健策略
-		combo := NewMultiStrategy("中长线组合", "适合中长线投资的策略组合", CombineConsensus)
-		combo.AddSubStrategy(NewRSIStrategy(14, 75, 25), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(20, 50, indicators.SMA), 1.5)
-		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9), 1.2)
+		combo := NewMultiStrategy("中长线组合", "适合中长线投资的策略组合")
+		combo.AddSubStrategy(NewRSIStrategy(14, 75, 25))
+		combo.AddSubStrategy(NewMACrossStrategy(20, 50, indicators.SMA))
+		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9))
 		return combo, nil
 
 	case Timeframe3d, Timeframe1w:
 		// 长线时间框架，使用长期趋势策略
-		combo := NewMultiStrategy("长线趋势组合", "适合长期趋势投资的策略组合", CombineWeightedAverage)
-		combo.AddSubStrategy(NewRSIStrategy(14, 80, 20), 1.0)
-		combo.AddSubStrategy(NewMACrossStrategy(50, 200, indicators.SMA), 2.0) // 经典50/200日均线
-		combo.AddSubStrategy(NewMACDStrategy(26, 52, 18), 1.0)
+		combo := NewMultiStrategy("长线趋势组合", "适合长期趋势投资的策略组合")
+		combo.AddSubStrategy(NewRSIStrategy(14, 80, 20))
+		combo.AddSubStrategy(NewMACrossStrategy(50, 200, indicators.SMA)) // 经典50/200日均线
+		combo.AddSubStrategy(NewMACDStrategy(26, 52, 18))
 		return combo, nil
 
 	case Timeframe1M:
 		// 月线时间框架，使用超长期价值投资策略
-		combo := NewMultiStrategy("价值投资组合", "适合价值投资的超长期策略", CombineUnanimous)
-		combo.AddSubStrategy(NewRSIStrategy(14, 85, 15), 1.0)                 // 更极端的超买超卖水平
-		combo.AddSubStrategy(NewMACrossStrategy(12, 36, indicators.EMA), 1.5) // 月线EMA交叉
-		combo.AddSubStrategy(NewMACDStrategy(36, 72, 24), 1.0)                // 月线MACD参数
+		combo := NewMultiStrategy("价值投资组合", "适合价值投资的超长期策略")
+		combo.AddSubStrategy(NewRSIStrategy(14, 85, 15))                 // 更极端的超买超卖水平
+		combo.AddSubStrategy(NewMACrossStrategy(12, 36, indicators.EMA)) // 月线EMA交叉
+		combo.AddSubStrategy(NewMACDStrategy(36, 72, 24))                // 月线MACD参数
 		return combo, nil
 
 	default:

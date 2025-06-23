@@ -137,15 +137,15 @@ func TestMACDStrategy(t *testing.T) {
 }
 
 func TestMultiStrategy(t *testing.T) {
-	combo := NewMultiStrategy("测试组合", "测试用组合策略", CombineWeightedAverage)
+	combo := NewMultiStrategy("通知组合", "专为通知系统设计的组合策略")
 
 	// 添加子策略
-	combo.AddSubStrategy(NewRSIStrategy(14, 70, 30), 1.0)
-	combo.AddSubStrategy(NewMACrossStrategy(5, 20, 0), 1.0)
+	combo.AddSubStrategy(NewRSIStrategy(14, 70, 30))
+	combo.AddSubStrategy(NewMACrossStrategy(5, 20, 0))
 
 	t.Run("Basic Properties", func(t *testing.T) {
-		assert.Equal(t, "测试组合", combo.Name())
-		assert.Equal(t, "测试用组合策略", combo.Description())
+		assert.Equal(t, "通知组合", combo.Name())
+		assert.Equal(t, "专为通知系统设计的组合策略", combo.Description())
 
 		subStrategies := combo.GetSubStrategies()
 		assert.Len(t, subStrategies, 2)
@@ -154,7 +154,7 @@ func TestMultiStrategy(t *testing.T) {
 	t.Run("Strategy Management", func(t *testing.T) {
 		// 测试添加和移除策略
 		macdStrategy := NewMACDStrategy(12, 26, 9)
-		combo.AddSubStrategy(macdStrategy, 1.5)
+		combo.AddSubStrategy(macdStrategy)
 
 		subStrategies := combo.GetSubStrategies()
 		assert.Len(t, subStrategies, 3)
@@ -164,11 +164,15 @@ func TestMultiStrategy(t *testing.T) {
 		assert.Len(t, subStrategies, 2)
 	})
 
-	t.Run("Evaluation", func(t *testing.T) {
-		// 创建足够的数据
+	t.Run("Notification Logic", func(t *testing.T) {
+		// 创建足够的数据 - 模拟触发信号的场景
 		prices := make([]float64, 50)
 		for i := 0; i < 50; i++ {
-			prices[i] = 100.0 + float64(i)*0.1 // 上升趋势
+			if i < 25 {
+				prices[i] = 100.0 - float64(i)*2.0 // 下降趋势，触发RSI超卖
+			} else {
+				prices[i] = 50.0 + float64(i-25)*3.0 // 上升趋势，触发均线金叉
+			}
 		}
 
 		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
@@ -177,10 +181,44 @@ func TestMultiStrategy(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// 验证组合结果
+		// 验证通知逻辑
 		assert.NotEmpty(t, result.Message)
-		assert.Contains(t, result.Metadata, "sub_strategies")
-		assert.Contains(t, result.Metadata, "combine_method")
+		assert.Contains(t, result.Metadata, "sub_results")
+		assert.Contains(t, result.Metadata, "triggered_count")
+		assert.Contains(t, result.Metadata, "total_strategies")
+
+		// 如果有信号触发，应该不是SignalNone
+		if result.Metadata["triggered_count"].(int) > 0 {
+			assert.NotEqual(t, SignalNone, result.Signal)
+		}
+	})
+	t.Run("Constant Price Behavior", func(t *testing.T) {
+		// 创建恒定价格，观察策略行为
+		prices := make([]float64, 50)
+		for i := 0; i < 50; i++ {
+			prices[i] = 100.0 // 恒定价格
+		}
+
+		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+
+		result, err := combo.Evaluate(data)
+		require.NoError(t, err)
+		require.NotNil(t, result)
+
+		// 验证通知逻辑正常工作
+		assert.NotNil(t, result.Metadata["triggered_count"])
+		assert.NotNil(t, result.Metadata["total_strategies"])
+		assert.Equal(t, 2, result.Metadata["total_strategies"])
+
+		// 验证消息格式
+		assert.NotEmpty(t, result.Message)
+		assert.Contains(t, result.Message, "组合策略")
+
+		// 如果有触发，验证相关字段正确
+		if result.Metadata["triggered_count"].(int) > 0 {
+			assert.NotEqual(t, SignalNone, result.Signal)
+			assert.NotEmpty(t, result.Metadata["triggered_strategies"])
+		}
 	})
 }
 

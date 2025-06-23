@@ -134,12 +134,12 @@ type Strategy interface {
 	SupportedTimeframes() []Timeframe
 }
 
-// CompositeStrategy 复合策略接口
+// CompositeStrategy 复合策略接口 - 简化版本，专为通知系统设计
 type CompositeStrategy interface {
 	Strategy
 
 	// AddSubStrategy 添加子策略
-	AddSubStrategy(strategy Strategy, weight float64)
+	AddSubStrategy(strategy Strategy)
 
 	// RemoveSubStrategy 移除子策略
 	RemoveSubStrategy(name string)

@@ -26,10 +26,6 @@ coverage.html
 ta-watcher
 ta-watcher.exe
 
-# 配置文件（保留示例配置）
-config.yaml
-!config.example.yaml
-
 # 日志文件
 *.log
 logs/

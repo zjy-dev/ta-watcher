@@ -42,6 +42,14 @@ help: ## 显示帮助信息
 	@echo "$(COLOR_BOLD)构建命令:$(COLOR_RESET)"
 	@echo "  $(COLOR_GREEN)build$(COLOR_RESET)               构建项目"
 	@echo "  $(COLOR_GREEN)clean$(COLOR_RESET)               清理构建文件"
+	@echo ""
+	@echo "$(COLOR_BOLD)Docker 命令:$(COLOR_RESET)"
+	@echo "  $(COLOR_GREEN)docker-build$(COLOR_RESET)        构建 Docker 镜像（依赖单元测试）"
+	@echo "  $(COLOR_GREEN)compose-up$(COLOR_RESET)          启动 Docker Compose 服务"
+	@echo "  $(COLOR_GREEN)compose-down$(COLOR_RESET)        停止 Docker Compose 服务"
+	@echo "  $(COLOR_GREEN)compose-logs$(COLOR_RESET)        查看服务日志"
+	@echo "  $(COLOR_GREEN)compose-ps$(COLOR_RESET)          查看服务状态"
+	@echo "  $(COLOR_GREEN)compose-clean$(COLOR_RESET)        清理 Docker 资源"
 
 .PHONY: test-all
 test-all: ## 运行所有测试（包括集成测试）
@@ -269,6 +277,71 @@ deps-update: ## 更新所有依赖到最新版本
 	@go mod tidy
 	@echo "$(COLOR_GREEN)✅ 依赖更新完成！$(COLOR_RESET)"
 
+# ===== Docker 相关命令 =====
+
+.PHONY: docker-build
+docker-build: test-unit ## 构建 Docker 镜像（依赖单元测试）
+	@echo "$(COLOR_BOLD)🐳 构建 Docker 镜像...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker build -t $(PROJECT_NAME):latest .
+	@echo "$(COLOR_GREEN)✅ Docker 镜像构建完成！$(COLOR_RESET)"
+
+.PHONY: compose-up
+compose-up: ## 使用 Docker Compose 启动服务
+	@echo "$(COLOR_BOLD)🐳 启动 Docker Compose 服务...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@if [ ! -f ".env" ] && [ -f ".env.example" ]; then \
+		echo "$(COLOR_YELLOW)⚠️  .env 文件不存在，复制 .env.example 到 .env$(COLOR_RESET)"; \
+		cp .env.example .env; \
+		echo "$(COLOR_YELLOW)⚠️  请编辑 .env 文件配置环境变量$(COLOR_RESET)"; \
+		echo "$(COLOR_YELLOW)⚠️  配置完成后请重新运行此命令$(COLOR_RESET)"; \
+		exit 1; \
+	fi
+	@if [ ! -f "config.yaml" ] && [ -f "config.example.yaml" ]; then \
+		cp config.example.yaml config.yaml; \
+		echo "$(COLOR_GREEN)✅ 已复制配置文件模板$(COLOR_RESET)"; \
+	fi
+	@docker-compose up -d --build
+	@echo "$(COLOR_GREEN)✅ Docker Compose 服务已启动！$(COLOR_RESET)"
+	@echo ""
+	@echo "$(COLOR_BOLD)有用的命令:$(COLOR_RESET)"
+	@echo "  make compose-logs     - 查看实时日志"
+	@echo "  make compose-ps       - 查看服务状态"
+	@echo "  make compose-down     - 停止服务"
+
+.PHONY: compose-down
+compose-down: ## 停止 Docker Compose 服务
+	@echo "$(COLOR_BOLD)🐳 停止 Docker Compose 服务...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker-compose down
+	@echo "$(COLOR_GREEN)✅ Docker Compose 服务已停止！$(COLOR_RESET)"
+
+.PHONY: compose-logs
+compose-logs: ## 查看 Docker Compose 日志
+	@echo "$(COLOR_BOLD)🐳 查看 Docker Compose 日志...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker-compose logs -f
+
+.PHONY: compose-ps
+compose-ps: ## 查看 Docker Compose 服务状态
+	@echo "$(COLOR_BOLD)🐳 查看 Docker Compose 服务状态...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker-compose ps
+
+.PHONY: compose-restart
+compose-restart: ## 重启 Docker Compose 服务
+	@echo "$(COLOR_BOLD)🐳 重启 Docker Compose 服务...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker-compose restart
+	@echo "$(COLOR_GREEN)✅ Docker Compose 服务已重启！$(COLOR_RESET)"
+
+.PHONY: compose-clean
+compose-clean: ## 清理 Docker Compose 资源
+	@echo "$(COLOR_BOLD)🐳 清理 Docker 资源...$(COLOR_RESET)"
+	@echo "$(COLOR_BLUE)===============================================$(COLOR_RESET)"
+	@docker-compose down -v --remove-orphans || true
+	@docker system prune -f
+	@echo "$(COLOR_GREEN)✅ Docker 资源清理完成！$(COLOR_RESET)"
 
 # 默认目标
 .DEFAULT_GOAL := help

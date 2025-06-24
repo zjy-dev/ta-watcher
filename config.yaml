@@ -1,0 +1,57 @@
+# TA Watcher 配置文件
+
+# Binance API 配置
+binance:
+  rate_limit:
+    requests_per_minute: 1200
+    retry_delay: 2s
+    max_retries: 3
+
+# 监控配置
+watcher:
+  interval: 12h
+  max_workers: 10
+  buffer_size: 100
+  log_level: "info"
+  enable_metrics: true
+
+# 通知配置
+notifiers:
+  email:
+    enabled: true
+    smtp:
+      host: "${SMTP_HOST}"
+      port: 587
+      username: "${SMTP_USERNAME}"
+      password: "${SMTP_PASSWORD}"
+      tls: true
+    from: "${FROM_EMAIL}"
+    to: ["${TO_EMAIL}"]
+    subject: "🚨 TA Watcher Alert - {{.Asset}} RSI Signal"
+    template: ""
+  
+  feishu:
+    enabled: false
+    webhook_url: ""
+    secret: ""
+    template: ""
+  
+  wechat:
+    enabled: false
+    webhook_url: ""
+    template: ""
+
+# 监控资产配置
+assets:
+  symbols:
+    - "BTC"
+    - "ETH"
+    - "BNB"
+    - "SOL"
+    - "ADA"
+  timeframes:
+    - "1d"
+    - "1w"
+    - "1M"
+  base_currency: "USDT"
+  market_cap_update_interval: 1h

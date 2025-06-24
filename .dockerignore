@@ -1,0 +1,51 @@
+# Ignore unnecessary files during Docker build
+
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+README.md
+
+# Ignore build artifacts
+
+bin/
+coverage.out
+coverage.html
+\*.log
+logs/
+
+# Ignore environment files (will be handled by compose)
+
+.env
+.env.local
+.env.example
+
+# Ignore test files
+
+_\_test.go
+\*\*/_\_test.go
+
+# Ignore development files
+
+_.tmp
+_.swp
+_.swo
+_~
+
+# Ignore OS files
+
+.DS_Store
+Thumbs.db
+
+# Ignore IDE files
+
+.vscode/
+.idea/
+\*.iml
+
+# Ignore documentation
+
+docs/
+\*.md
+!README.md

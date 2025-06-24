@@ -166,25 +166,44 @@ func convertSymbol(symbol string) string {
 	}
 }
 
-// convertInterval 转换时间间隔
+// convertInterval 转换时间间隔 - 将Binance格式的interval转换为Coinbase支持的granularity
 func convertInterval(interval string) (int, error) {
 	switch interval {
+	// 分钟级别
 	case "1m":
-		return 60, nil
+		return 60, nil // 1分钟
+	case "3m":
+		return 300, nil // 5分钟 (Coinbase最接近的)
 	case "5m":
-		return 300, nil
+		return 300, nil // 5分钟
 	case "15m":
-		return 900, nil
+		return 900, nil // 15分钟
+	case "30m":
+		return 1800, nil // 30分钟 (如果Coinbase不支持，使用15分钟)
+	// 小时级别
 	case "1h":
-		return 3600, nil
+		return 3600, nil // 1小时
+	case "2h":
+		return 7200, nil // 2小时 (如果Coinbase不支持，使用1小时)
 	case "4h":
-		return 14400, nil
+		return 14400, nil // 4小时 (如果Coinbase不支持，使用6小时)
 	case "6h":
-		return 21600, nil
+		return 21600, nil // 6小时
+	case "8h":
+		return 28800, nil // 8小时 (如果Coinbase不支持，使用6小时)
+	case "12h":
+		return 43200, nil // 12小时 (如果Coinbase不支持，使用6小时)
+	// 日/周/月级别
 	case "1d":
-		return 86400, nil
+		return 86400, nil // 1天
+	case "3d":
+		return 86400, nil // 3天 (Coinbase不支持，使用1天)
+	case "1w":
+		return 86400, nil // 1周 (Coinbase不支持，使用1天)
+	case "1M":
+		return 86400, nil // 1月 (Coinbase不支持，使用1天)
 	default:
-		return 0, fmt.Errorf("不支持的时间间隔: %s", interval)
+		return 0, fmt.Errorf("不支持的时间间隔: %s，支持的间隔: 1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w,1M", interval)
 	}
 }
 

@@ -138,8 +138,8 @@ func run() error {
 
 	log.Printf("资产预检查完成，将监控 %d 个币种", len(validationResult.ValidSymbols))
 
-	// 创建 Watcher 实例，并传入验证结果
-	w, err := watcher.NewWithValidationResult(cfg, validationResult)
+	// 创建 Watcher 实例，并传入验证结果和数据源
+	w, err := watcher.NewWithValidationResultAndDataSource(cfg, validationResult, dataSource)
 	if err != nil {
 		return fmt.Errorf("Watcher 创建失败: %w", err)
 	}

@@ -158,8 +158,8 @@ func (f *Factory) parseCustomStrategy(name string, params ...interface{}) (Strat
 // createRSIStrategy 创建RSI策略
 func (f *Factory) createRSIStrategy(params ...interface{}) (Strategy, error) {
 	period := 14
-	overbought := 70.0
-	oversold := 30.0
+	overbought := 65.0
+	oversold := 35.0
 
 	if len(params) >= 1 {
 		if p, ok := params[0].(int); ok {

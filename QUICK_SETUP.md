@@ -1,5 +1,21 @@
 # 快速设置指南
 
+## ✅ 2025 年 6 月更新 - Actions 版本升级
+
+所有 GitHub Actions 已更新到最新稳定版本：
+
+- ✅ `actions/upload-artifact@v4` - 修复 v3 废弃问题
+- ✅ `actions/cache@v4` - 最新缓存策略
+- ✅ `actions/checkout@v4` - 最新代码检出
+- ✅ `actions/setup-go@v4` - Go 环境设置
+
+### v4 主要改进：
+
+- **不可变性**: 每个 artifact 都有唯一 ID，防止意外覆盖
+- **更好的性能**: 优化的上传和下载速度
+- **增强安全性**: 更严格的权限控制
+- **动态命名**: 支持 `${{ github.run_number }}` 避免冲突
+
 ## 🚀 GitHub Actions CI/CD 流程
 
 ### 改进的 CI 流程包含：

@@ -24,7 +24,7 @@ jobs:
           go-version: "1.24" # Use the latest stable Go version
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -78,8 +78,9 @@ jobs:
 
       - name: Upload logs (if any)
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ta-watcher-logs-${{ github.run_number }}
           path: logs/
           retention-days: 7
+          if-no-files-found: ignore

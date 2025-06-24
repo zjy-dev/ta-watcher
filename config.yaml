@@ -1,86 +1,83 @@
 # TA Watcher 配置文件
+# 这是一个完整的示例配置，展示了所有可配置选项
 
-# 数据源配置
+# 数据源配置（新增：支持多数据源切换）
 datasource:
   primary: "coinbase"       # 主数据源: binance, coinbase
-  fallback: "binance"       # 备用数据源（可选）
+  fallback: ""              # 备用数据源（留空，避免地理限制）
   timeout: 30s              # 请求超时时间
   max_retries: 3            # 最大重试次数
-  
-  # Binance 配置
-  binance:
-    rate_limit:
-      requests_per_minute: 1200  # 每分钟请求数
-      retry_delay: 2s            # 重试延迟
-      max_retries: 3             # 最大重试次数
-  
-  # Coinbase 配置
-  coinbase:
-    rate_limit:
-      requests_per_minute: 10    # 每分钟请求数
-      retry_delay: 2s            # 重试延迟
-      max_retries: 3             # 最大重试次数
 
-# Binance API 配置
+# Binance API 配置（使用公开API，无需密钥）
 binance:
+  # 限流配置
   rate_limit:
-    requests_per_minute: 1200
-    retry_delay: 2s
-    max_retries: 3
+    requests_per_minute: 1200       # 每分钟最大请求数
+    retry_delay: 2s                 # 重试延迟
+    max_retries: 3                  # 最大重试次数
 
-# Coinbase API 配置
+# Coinbase Pro API 配置（新增：支持美国IP）
 coinbase:
+  # 限流配置
   rate_limit:
-    requests_per_minute: 10
-    retry_delay: 2s
-    max_retries: 3
+    requests_per_minute: 600        # 每分钟最大请求数（Coinbase限制较严）
+    retry_delay: 3s                 # 重试延迟
+    max_retries: 3                  # 最大重试次数
 
 # 监控配置
 watcher:
-  interval: 12h
-  max_workers: 10
-  buffer_size: 100
-  log_level: "info"
-  enable_metrics: true
+  interval: 5m                      # 监控间隔
+  max_workers: 10                   # 最大工作协程数
+  buffer_size: 100                  # 缓冲区大小
+  log_level: "info"                 # 日志级别: debug, info, warn, error
+  enable_metrics: true              # 是否启用指标收集
 
 # 通知配置
 notifiers:
+  # 邮件通知
   email:
-    enabled: true
+    enabled: true                   # 启用邮件通知（GitHub Actions运行时）
     smtp:
-      host: "${SMTP_HOST}"
-      port: 587
-      username: "${SMTP_USERNAME}"
-      password: "${SMTP_PASSWORD}"
-      tls: true
-    from: "${FROM_EMAIL}"
-    to: ["${TO_EMAIL}"]
-    subject: "🚨 TA Watcher Alert - {{.Asset}} RSI Signal"
-    template: ""
+      host: "${SMTP_HOST:smtp.gmail.com}"  # SMTP服务器地址（从环境变量获取，默认gmail）
+      port: 587                     # SMTP端口
+      username: "${SMTP_USERNAME}"  # SMTP用户名（从环境变量获取）
+      password: "${SMTP_PASSWORD}"  # SMTP密码（从环境变量获取）
+      tls: true                     # 是否使用TLS加密
+    from: "${FROM_EMAIL}"           # 发送者邮箱（从环境变量获取）
+    to:                             # 接收者邮箱列表
+      - "${TO_EMAIL:zhangjingyao666@gmail.com}"  # 从环境变量获取，带默认值
+    subject: "TA Watcher Alert - {{.Asset}} {{.Level}}"  # 邮件主题模板
+    template: ""                    # 邮件内容模板（留空使用默认）
   
+  # 飞书通知
   feishu:
-    enabled: false
-    webhook_url: ""
-    secret: ""
-    template: ""
+    enabled: false                  # 是否启用飞书通知
+    webhook_url: "${FEISHU_WEBHOOK_URL}"  # 飞书机器人Webhook URL（从环境变量获取）
+    secret: "${FEISHU_SECRET}"      # 签名密钥（从环境变量获取，可选）
+    template: ""                    # 消息模板（留空使用默认）
   
+  # 微信通知
   wechat:
-    enabled: false
-    webhook_url: ""
-    template: ""
+    enabled: false                  # 是否启用微信通知
+    webhook_url: "${WECHAT_WEBHOOK_URL}"  # 企业微信机器人Webhook URL（从环境变量获取）
+    template: ""                    # 消息模板（留空使用默认）
 
 # 监控资产配置
 assets:
-  symbols:
-    - "BTC"
-    - "ETH"
-    - "BNB"
-    - "SOL"
-    - "ADA"
-  timeframes:
-    - "1d"
-    - "1w"
-    - "1M"
-  base_currency: "USDT"
-  market_cap_update_interval: 1h
-  datasource: "binance"  # 可选: "binance" 或 "coinbase"
+  symbols:                          # 要监控的加密货币列表
+    - "BTC"                         # 比特币
+    - "ETH"                         # 以太坊
+    - "BNB"                         # 币安币
+    - "ADA"                         # 卡尔达诺
+    - "SOL"                         # Solana
+  timeframes:                       # 监控的时间框架
+    - "1d"                          # 日线
+    - "1w"                          # 周线
+    - "1M"                          # 月线
+  base_currency: "USDT"             # 基准货币
+  market_cap_update_interval: 1h    # 市值数据更新间隔
+
+# 注意：策略现在完全由 Go 代码定义，不再需要配置文件设置
+# 请查看 internal/strategy/ 目录下的内置策略
+# 或在 strategies/ 目录下编写自定义策略
+

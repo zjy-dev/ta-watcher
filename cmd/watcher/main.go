@@ -15,6 +15,8 @@ import (
 	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/watcher"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -239,12 +241,54 @@ func performHealthCheck() {
 	}
 	log.Printf("✅ 配置文件存在: %s", *configPath)
 
-	// 检查配置文件格式
-	if _, err := config.LoadConfig(*configPath); err != nil {
+	// 检查配置文件格式（跳过环境变量验证）
+	if cfg, err := loadConfigForHealthCheck(*configPath); err != nil {
 		log.Printf("❌ 配置文件格式错误: %v", err)
 		os.Exit(1)
+	} else {
+		log.Printf("✅ 配置文件格式正确")
+
+		// 检查基本配置项
+		if len(cfg.Assets.Symbols) == 0 {
+			log.Printf("❌ 没有配置监控币种")
+			os.Exit(1)
+		}
+		log.Printf("✅ 配置了 %d 个监控币种", len(cfg.Assets.Symbols))
+
+		if len(cfg.Assets.Timeframes) == 0 {
+			log.Printf("❌ 没有配置监控时间框架")
+			os.Exit(1)
+		}
+		log.Printf("✅ 配置了 %d 个时间框架", len(cfg.Assets.Timeframes))
 	}
-	log.Printf("✅ 配置文件格式正确")
 
 	log.Printf("✅ 健康检查完成")
+}
+
+// loadConfigForHealthCheck 为健康检查加载配置（跳过环境变量验证）
+func loadConfigForHealthCheck(filename string) (*config.Config, error) {
+	// 检查文件是否存在
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found: %s", filename)
+	}
+
+	// 读取文件内容
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// 解析 YAML
+	cfg := config.DefaultConfig()
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// 健康检查时跳过环境变量展开和完整验证
+	// 只验证基本结构
+	if err := cfg.Assets.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid assets config: %w", err)
+	}
+
+	return cfg, nil
 }

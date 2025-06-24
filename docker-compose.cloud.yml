@@ -56,11 +56,12 @@ services:
     command: >
       sh -c "
         apk add --no-cache docker-compose &&
+        echo 'Simulating twice-daily execution (6AM and 6PM Beijing Time)' &&
         while true; do
-          echo 'Running scheduled check...' &&
+          echo 'Running scheduled check at $(date)...' &&
           docker-compose run --rm ta-watcher-cron &&
-          echo 'Waiting 5 minutes for next run...' &&
-          sleep 300
+          echo 'Waiting 12 hours for next run (simulated as 60 seconds for testing)...' &&
+          sleep 60
         done
       "
     volumes:

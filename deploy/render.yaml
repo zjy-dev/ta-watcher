@@ -11,8 +11,8 @@ services:
     dockerfilePath: ./Dockerfile.cloud
     dockerContext: .
     
-    # Cron schedule (every 5 minutes)
-    schedule: "*/5 * * * *"
+    # Cron schedule (twice daily: 6AM and 6PM Beijing Time)
+    schedule: "0 10,22 * * *"
     
     # Resource configuration
     plan: starter  # Free tier

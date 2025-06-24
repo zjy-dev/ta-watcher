@@ -21,7 +21,7 @@ watcher:
 notifiers:
   # 邮件通知
   email:
-    enabled: false                  # 是否启用邮件通知（集成测试时设为true）
+    enabled: true                   # 启用邮件通知（GitHub Actions运行时）
     smtp:
       host: "${SMTP_HOST:smtp.gmail.com}"  # SMTP服务器地址（从环境变量获取，默认gmail）
       port: 587                     # SMTP端口

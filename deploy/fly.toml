@@ -25,8 +25,8 @@ memory = "512mb"
 
 # Cron job configuration
 [cron]
-# Run every 5 minutes
-schedule = "*/5 * * * *"
+# Run twice daily: 6AM and 6PM Beijing Time (22:00 and 10:00 UTC)
+schedule = "0 10,22 * * *"
 
 # Command to run
 cmd = ["/ta-watcher", "--single-run", "--config", "/config.yaml"]

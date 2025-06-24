@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "name": "ta-watcher",
+  "builds": [
+    {
+      "src": "cmd/watcher/main.go",
+      "use": "@vercel/go",
+      "config": {
+        "buildCommand": "go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher"
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/trigger",
+      "dest": "/bin/ta-watcher"
+    },
+    {
+      "src": "/health",
+      "dest": "/bin/ta-watcher"
+    }
+  ],
+  "env": {
+    "TZ": "UTC",
+    "LOG_LEVEL": "info"
+  },
+  "build": {
+    "env": {
+      "GO_VERSION": "1.24"
+    }
+  },
+  "functions": {
+    "bin/ta-watcher": {
+      "runtime": "go1.x",
+      "memory": 512,
+      "maxDuration": 300
+    }
+  }
+}

@@ -139,6 +139,37 @@ func (w *Watcher) IsRunning() bool {
 	return w.running
 }
 
+// RunSingleCheck 执行单次检查 - 用于云函数/定时任务模式
+func (w *Watcher) RunSingleCheck(ctx context.Context) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.running {
+		return fmt.Errorf("watcher is already running in continuous mode")
+	}
+
+	// 设置单次运行状态
+	w.ctx = ctx
+	w.stats.StartTime = time.Now()
+
+	log.Println("🎯 开始单次检查模式...")
+
+	// 显示当前注册的策略
+	strategies := w.strategy.ListStrategies()
+	log.Printf("🎯 当前注册的策略数量: %d", len(strategies))
+	for i, strategyName := range strategies {
+		if strategyObj, err := w.strategy.GetStrategy(strategyName); err == nil {
+			log.Printf("   %d. %s - %s", i+1, strategyName, strategyObj.Description())
+		}
+	}
+
+	// 执行一次监控周期
+	w.runMonitorCycle()
+
+	log.Println("✅ 单次检查完成")
+	return nil
+}
+
 // GetHealth 获取健康状态
 func (w *Watcher) GetHealth() *HealthStatus {
 	w.mu.RLock()

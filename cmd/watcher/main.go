@@ -21,6 +21,7 @@ var (
 	version     = flag.Bool("version", false, "显示版本信息")
 	healthCheck = flag.Bool("health", false, "健康检查")
 	daemon      = flag.Bool("daemon", false, "后台运行模式")
+	singleRun   = flag.Bool("single-run", false, "单次运行模式（用于定时任务/云函数）")
 )
 
 const (
@@ -112,6 +113,12 @@ func run() error {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// 启动 Watcher
+	if *singleRun {
+		// 单次运行模式：执行一次检查后退出
+		log.Println("=== 单次运行模式 ===")
+		return runSingleCheck(ctx2, w)
+	}
+
 	if err := w.Start(ctx2); err != nil {
 		return fmt.Errorf("Watcher 启动失败: %w", err)
 	}
@@ -139,6 +146,30 @@ func run() error {
 	}
 
 	log.Println("TA Watcher 已停止")
+	return nil
+}
+
+// runSingleCheck 执行单次检查
+func runSingleCheck(ctx context.Context, w *watcher.Watcher) error {
+	log.Println("开始执行单次检查...")
+
+	// 创建一个短期context，确保检查不会无限期运行
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	// 执行一次完整的检查周期
+	if err := w.RunSingleCheck(checkCtx); err != nil {
+		return fmt.Errorf("单次检查失败: %w", err)
+	}
+
+	// 获取统计信息
+	stats := w.GetStatistics()
+	log.Printf("=== 单次检查完成 ===")
+	log.Printf("处理任务: %d", stats.TotalTasks)
+	log.Printf("完成任务: %d", stats.CompletedTasks)
+	log.Printf("失败任务: %d", stats.FailedTasks)
+	log.Printf("发送通知: %d", stats.NotificationsSent)
+
 	return nil
 }
 

@@ -12,6 +12,7 @@ import (
 
 	"ta-watcher/internal/assets"
 	"ta-watcher/internal/binance"
+	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/watcher"
 )
@@ -65,16 +66,52 @@ func run() error {
 	log.Printf("配置的币种: %v", cfg.Assets.Symbols)
 	log.Printf("监控时间框架: %v", cfg.Assets.Timeframes)
 
-	// 创建 Binance 客户端用于预检查
-	log.Println("正在连接 Binance API...")
-	binanceClient, err := binance.NewClient(&cfg.Binance)
-	if err != nil {
-		return fmt.Errorf("Binance 客户端创建失败: %w", err)
+	// 根据配置创建适当的数据源
+	log.Println("正在初始化数据源...")
+
+	// 默认使用 Binance 数据源
+	var dataSource binance.DataSource
+
+	// 检查是否配置了数据源选择
+	primarySource := "binance" // 默认值
+	if cfg.DataSource.Primary != "" {
+		primarySource = cfg.DataSource.Primary
+	}
+
+	switch primarySource {
+	case "binance":
+		log.Println("使用 Binance 数据源")
+		binanceClient, err := binance.NewClient(&cfg.Binance)
+		if err != nil {
+			return fmt.Errorf("Binance 客户端创建失败: %w", err)
+		}
+		dataSource = binanceClient
+
+	case "coinbase":
+		log.Println("使用 Coinbase 数据源（通过适配器）")
+		// 转换配置格式
+		coinbaseConfig := &coinbase.Config{
+			RateLimit: struct {
+				RequestsPerMinute int           `yaml:"requests_per_minute"`
+				RetryDelay        time.Duration `yaml:"retry_delay"`
+				MaxRetries        int           `yaml:"max_retries"`
+			}{
+				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
+				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
+				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
+			},
+		}
+		coinbaseClient := coinbase.NewClient(coinbaseConfig)
+		// 使用适配器将 Coinbase 客户端包装为 binance.DataSource 接口
+		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
+
+	default:
+		return fmt.Errorf("不支持的数据源: %s", primarySource)
 	}
 
 	// 预检查：验证所有配置的资产
 	log.Println("开始资产预检查...")
-	validator := assets.NewValidator(binanceClient, &cfg.Assets)
+	validator := assets.NewValidator(dataSource, &cfg.Assets)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

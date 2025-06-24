@@ -1,9 +1,37 @@
 # TA Watcher 配置文件
 
+# 数据源配置
+datasource:
+  primary: "coinbase"       # 主数据源: binance, coinbase
+  fallback: "binance"       # 备用数据源（可选）
+  timeout: 30s              # 请求超时时间
+  max_retries: 3            # 最大重试次数
+  
+  # Binance 配置
+  binance:
+    rate_limit:
+      requests_per_minute: 1200  # 每分钟请求数
+      retry_delay: 2s            # 重试延迟
+      max_retries: 3             # 最大重试次数
+  
+  # Coinbase 配置
+  coinbase:
+    rate_limit:
+      requests_per_minute: 10    # 每分钟请求数
+      retry_delay: 2s            # 重试延迟
+      max_retries: 3             # 最大重试次数
+
 # Binance API 配置
 binance:
   rate_limit:
     requests_per_minute: 1200
+    retry_delay: 2s
+    max_retries: 3
+
+# Coinbase API 配置
+coinbase:
+  rate_limit:
+    requests_per_minute: 10
     retry_delay: 2s
     max_retries: 3
 
@@ -55,3 +83,4 @@ assets:
     - "1M"
   base_currency: "USDT"
   market_cap_update_interval: 1h
+  datasource: "binance"  # 可选: "binance" 或 "coinbase"

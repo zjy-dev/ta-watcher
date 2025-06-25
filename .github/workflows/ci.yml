@@ -2,9 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [single-run, main]
+    branches: [main]
   pull_request:
-    branches: [single-run, main]
+    branches: [main]
   workflow_dispatch: # Allow manual trigger
 
 jobs:
@@ -41,7 +41,7 @@ jobs:
       - name: Test health check
         run: ./bin/ta-watcher -health -config config.example.yaml
 
-      - name: Upload test results
+      - name: Upload test results and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -49,7 +49,9 @@ jobs:
           path: |
             coverage.out
             coverage.html
+            logs/
           retention-days: 7
+          if-no-files-found: ignore
 
   # 配置测试（手动触发或secrets变更后）
   config-test:
@@ -119,12 +121,21 @@ jobs:
 
           echo -e "\n🎉 Configuration Test Complete!"
 
+      - name: Upload config test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-test-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Push后立即运行一次（仅在single-run分支）
   immediate-run:
     name: Immediate Run After Push
     runs-on: ubuntu-latest
     needs: test # 等待测试通过
-    if: github.ref == 'refs/heads/single-run' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout code
@@ -182,6 +193,19 @@ jobs:
 
           echo "✅ Immediate run completed at $(date)"
           echo "⏰ Next scheduled runs: Beijing Time 06:00 and 18:00 daily"
+
+          # 显示日志摘要
+          echo ""
+          echo "📋 Log Summary:"
+          if [ -d "logs" ] && [ "$(ls -A logs)" ]; then
+            echo "✅ Log files created:"
+            ls -la logs/
+            echo ""
+            echo "📄 Latest log content (last 20 lines):"
+            tail -20 logs/ta-watcher_*.log | head -20
+          else
+            echo "⚠️  No log files found"
+          fi
 
       - name: Upload logs (immediate run)
         if: always()

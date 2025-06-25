@@ -4,9 +4,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -35,6 +37,9 @@ const (
 
 func main() {
 	flag.Parse()
+
+	// 设置日志输出
+	setupLogging()
 
 	// 显示版本信息
 	if *version {
@@ -263,6 +268,36 @@ func performHealthCheck() {
 	}
 
 	log.Printf("✅ 健康检查完成")
+}
+
+// setupLogging 设置日志输出到文件和控制台
+func setupLogging() {
+	// 创建 logs 目录
+	logsDir := "logs"
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		log.Printf("警告: 无法创建日志目录: %v", err)
+		return
+	}
+
+	// 生成日志文件名（包含时间戳）
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	logFileName := filepath.Join(logsDir, fmt.Sprintf("ta-watcher_%s.log", timestamp))
+
+	// 打开日志文件
+	logFile, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("警告: 无法创建日志文件 %s: %v", logFileName, err)
+		return
+	}
+
+	// 设置多重输出：同时输出到控制台和文件
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter)
+
+	// 设置日志格式
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
+
+	log.Printf("📁 日志文件: %s", logFileName)
 }
 
 // loadConfigForHealthCheck 为健康检查加载配置（跳过环境变量验证）

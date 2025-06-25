@@ -67,6 +67,9 @@ test-all: ## 运行所有测试（包括集成测试）
 	@echo "$(COLOR_YELLOW)🔗 运行集成测试...$(COLOR_RESET)"
 	@$(MAKE) test-integration
 	@echo ""
+	@echo "$(COLOR_YELLOW)📊 运行覆盖率测试...$(COLOR_RESET)"
+	@$(MAKE) test-coverage
+	@echo ""
 	@echo "$(COLOR_GREEN)✅ 所有测试完成！$(COLOR_RESET)"
 
 .PHONY: test-unit

@@ -2,8 +2,8 @@ name: TA Watcher Scheduled Run
 
 on:
   schedule:
-    # Run twice daily: 6AM and 6PM Beijing Time (22:00 and 10:00 UTC)
-    - cron: "0 10,22 * * *"
+    # 每天两次运行：北京时间上午5:42和下午5:42（对应UTC时间21:42和9:42）
+    - cron: "42 9,21 * * *"
 
   # Allow manual trigger for testing (but not immediate after push)
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: single-run
+          ref: main
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -75,6 +75,19 @@ jobs:
           ./bin/ta-watcher --single-run --config config.example.yaml
 
           echo "✅ Scheduled run completed at $(date)"
+
+          # 显示日志摘要
+          echo ""
+          echo "📋 Log Summary:"
+          if [ -d "logs" ] && [ "$(ls -A logs)" ]; then
+            echo "✅ Log files created:"
+            ls -la logs/
+            echo ""
+            echo "📄 Latest log content (last 20 lines):"
+            tail -20 logs/ta-watcher_*.log | head -20
+          else
+            echo "⚠️  No log files found"
+          fi
 
       - name: Upload logs (if any)
         if: always()

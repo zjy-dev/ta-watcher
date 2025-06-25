@@ -1,0 +1,86 @@
+name: TA Watcher Scheduled Run
+
+on:
+  schedule:
+    # Run twice daily: 6AM and 6PM Beijing Time (22:00 and 10:00 UTC)
+    - cron: "0 10,22 * * *"
+
+  # Allow manual trigger for testing (but not immediate after push)
+  workflow_dispatch:
+
+jobs:
+  scheduled-run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: single-run
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24" # Use the latest stable Go version
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build application
+        run: go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher
+
+      - name: Run TA Watcher (Scheduled)
+        env:
+          # Email configuration (set these as repository secrets)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+
+          # Optional webhook configurations
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+
+          # App settings
+          TZ: UTC
+          LOG_LEVEL: info
+        run: |
+          echo "⏰ Starting TA Watcher scheduled run at $(date)"
+          echo "🌍 Beijing Time: $(TZ=Asia/Shanghai date)"
+
+          # Check if secrets are available
+          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USERNAME" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$FROM_EMAIL" ] || [ -z "$TO_EMAIL" ]; then
+            echo "❌ Error: Required email secrets are not configured!"
+            echo "Please configure the following repository secrets:"
+            echo "  - SMTP_HOST"
+            echo "  - SMTP_USERNAME" 
+            echo "  - SMTP_PASSWORD"
+            echo "  - FROM_EMAIL"
+            echo "  - TO_EMAIL"
+            exit 1
+          fi
+
+          echo "✅ All required secrets are configured"
+          echo "📧 Email notifications will be sent to: ${TO_EMAIL}"
+
+          ./bin/ta-watcher --single-run --config config.example.yaml
+
+          echo "✅ Scheduled run completed at $(date)"
+
+      - name: Upload logs (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ta-watcher-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore

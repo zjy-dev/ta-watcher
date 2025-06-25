@@ -6,6 +6,9 @@ import (
 
 // Config 应用程序配置
 type Config struct {
+	// 数据源配置
+	DataSource DataSourceConfig `yaml:"datasource"`
+
 	// Binance 配置
 	Binance BinanceConfig `yaml:"binance"`
 
@@ -45,6 +48,22 @@ type RateLimitConfig struct {
 	RequestsPerMinute int           `yaml:"requests_per_minute"` // 每分钟请求数
 	RetryDelay        time.Duration `yaml:"retry_delay"`         // 重试延迟
 	MaxRetries        int           `yaml:"max_retries"`         // 最大重试次数
+}
+
+// DataSourceConfig 数据源配置
+type DataSourceConfig struct {
+	Primary    string        `yaml:"primary"`     // 主数据源: binance, coinbase
+	Fallback   string        `yaml:"fallback"`    // 备用数据源
+	Timeout    time.Duration `yaml:"timeout"`     // 请求超时时间
+	MaxRetries int           `yaml:"max_retries"` // 最大重试次数
+
+	Binance  BinanceConfig  `yaml:"binance"`  // Binance 配置
+	Coinbase CoinbaseConfig `yaml:"coinbase"` // Coinbase 配置
+}
+
+// CoinbaseConfig Coinbase 配置
+type CoinbaseConfig struct {
+	RateLimit RateLimitConfig `yaml:"rate_limit"`
 }
 
 // WatcherConfig 监控配置

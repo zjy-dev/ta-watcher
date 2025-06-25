@@ -8,6 +8,7 @@ import (
 
 	"ta-watcher/internal/assets"
 	"ta-watcher/internal/binance"
+	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/notifiers"
 	"ta-watcher/internal/strategy"
@@ -19,11 +20,55 @@ func New(cfg *config.Config) (*Watcher, error) {
 		return nil, fmt.Errorf("config cannot be nil")
 	}
 
-	// 创建数据源
-	dataSource, err := binance.NewClient(&cfg.Binance)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create binance client: %w", err)
+	// 创建数据源（根据配置选择）
+	var dataSource binance.DataSource
+	var err error
+
+	// 根据配置的主数据源创建对应的客户端
+	primarySource := cfg.DataSource.Primary
+	switch primarySource {
+	case "binance":
+		dataSource, err = binance.NewClient(&cfg.Binance)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create binance client: %w", err)
+		}
+	case "coinbase":
+		// 创建 Coinbase 适配器
+		coinbaseConfig := &coinbase.Config{
+			RateLimit: struct {
+				RequestsPerMinute int           `yaml:"requests_per_minute"`
+				RetryDelay        time.Duration `yaml:"retry_delay"`
+				MaxRetries        int           `yaml:"max_retries"`
+			}{
+				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
+				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
+				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
+			},
+		}
+		coinbaseClient := coinbase.NewClient(coinbaseConfig)
+		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
+		log.Println("✅ Watcher 内部使用 Coinbase 数据源（通过适配器）")
+	default:
+		return nil, fmt.Errorf("unsupported data source: %s", primarySource)
 	}
+
+	return newWatcherWithDataSource(cfg, dataSource)
+}
+
+// NewWithDataSource 使用指定的数据源创建 Watcher
+func NewWithDataSource(cfg *config.Config, dataSource binance.DataSource) (*Watcher, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+	if dataSource == nil {
+		return nil, fmt.Errorf("dataSource cannot be nil")
+	}
+
+	return newWatcherWithDataSource(cfg, dataSource)
+}
+
+// newWatcherWithDataSource 内部函数：使用数据源创建 Watcher
+func newWatcherWithDataSource(cfg *config.Config, dataSource binance.DataSource) (*Watcher, error) {
 
 	// 创建通知管理器
 	notifier := notifiers.NewManager()
@@ -46,13 +91,13 @@ func New(cfg *config.Config) (*Watcher, error) {
 	strategyManager := strategy.NewManager(strategy.DefaultManagerConfig())
 
 	// 注册RSI策略 - 通知系统使用敏感参数
-	// 参数调整：70超买/30超卖，更频繁的信号适合通知系统
-	rsiStrategy := strategy.NewRSIStrategy(14, 70, 30)
+	// 参数调整：65超买/35超卖，更合理的阈值适合通知系统
+	rsiStrategy := strategy.NewRSIStrategy(14, 65, 35)
 	if err := strategyManager.RegisterStrategy(rsiStrategy); err != nil {
 		return nil, fmt.Errorf("failed to register RSI strategy: %w", err)
 	}
 	log.Printf("✅ 已注册RSI策略: %s", rsiStrategy.Description())
-	log.Printf("📊 策略参数: RSI周期=%d, 超买阈值=%.0f, 超卖阈值=%.0f (通知系统优化)", 14, 70.0, 30.0)
+	log.Printf("📊 策略参数: RSI周期=%d, 超买阈值=%.0f, 超卖阈值=%.0f (通知系统优化)", 14, 65.0, 35.0)
 
 	return &Watcher{
 		config:           cfg,
@@ -67,6 +112,16 @@ func New(cfg *config.Config) (*Watcher, error) {
 // NewWithValidationResult 创建带有验证结果的 Watcher 实例
 func NewWithValidationResult(cfg *config.Config, validationResult *assets.ValidationResult) (*Watcher, error) {
 	watcher, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	watcher.validationResult = validationResult
+	return watcher, nil
+}
+
+// NewWithValidationResultAndDataSource 创建带有验证结果和指定数据源的 Watcher 实例
+func NewWithValidationResultAndDataSource(cfg *config.Config, validationResult *assets.ValidationResult, dataSource binance.DataSource) (*Watcher, error) {
+	watcher, err := NewWithDataSource(cfg, dataSource)
 	if err != nil {
 		return nil, err
 	}
@@ -137,6 +192,37 @@ func (w *Watcher) IsRunning() bool {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.running
+}
+
+// RunSingleCheck 执行单次检查 - 用于云函数/定时任务模式
+func (w *Watcher) RunSingleCheck(ctx context.Context) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.running {
+		return fmt.Errorf("watcher is already running in continuous mode")
+	}
+
+	// 设置单次运行状态
+	w.ctx = ctx
+	w.stats.StartTime = time.Now()
+
+	log.Println("🎯 开始单次检查模式...")
+
+	// 显示当前注册的策略
+	strategies := w.strategy.ListStrategies()
+	log.Printf("🎯 当前注册的策略数量: %d", len(strategies))
+	for i, strategyName := range strategies {
+		if strategyObj, err := w.strategy.GetStrategy(strategyName); err == nil {
+			log.Printf("   %d. %s - %s", i+1, strategyName, strategyObj.Description())
+		}
+	}
+
+	// 执行一次监控周期
+	w.runMonitorCycle()
+
+	log.Println("✅ 单次检查完成")
+	return nil
 }
 
 // GetHealth 获取健康状态

@@ -38,10 +38,10 @@ func createTestMarketData(symbol string, timeframe Timeframe, prices []float64) 
 }
 
 func TestRSIStrategy(t *testing.T) {
-	strategy := NewRSIStrategy(14, 70, 30)
+	strategy := NewRSIStrategy(14, 65, 35)
 
 	t.Run("Basic Properties", func(t *testing.T) {
-		assert.Equal(t, "RSI_14_70_30", strategy.Name())
+		assert.Equal(t, "RSI_14_65_35", strategy.Name())
 		assert.Contains(t, strategy.Description(), "RSI")
 		assert.Equal(t, 15, strategy.RequiredDataPoints()) // 14 + 1
 		assert.NotEmpty(t, strategy.SupportedTimeframes())
@@ -140,7 +140,7 @@ func TestMultiStrategy(t *testing.T) {
 	combo := NewMultiStrategy("通知组合", "专为通知系统设计的组合策略")
 
 	// 添加子策略
-	combo.AddSubStrategy(NewRSIStrategy(14, 70, 30))
+	combo.AddSubStrategy(NewRSIStrategy(14, 65, 35))
 	combo.AddSubStrategy(NewMACrossStrategy(5, 20, 0))
 
 	t.Run("Basic Properties", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestStrategyManager(t *testing.T) {
 	manager := NewManager(DefaultManagerConfig())
 
 	t.Run("Strategy Registration", func(t *testing.T) {
-		rsiStrategy := NewRSIStrategy(14, 70, 30)
+		rsiStrategy := NewRSIStrategy(14, 65, 35)
 
 		err := manager.RegisterStrategy(rsiStrategy)
 		assert.NoError(t, err)
@@ -254,7 +254,7 @@ func TestStrategyManager(t *testing.T) {
 
 	t.Run("Evaluation", func(t *testing.T) {
 		// 注册多个策略
-		manager.RegisterStrategy(NewRSIStrategy(14, 70, 30))
+		manager.RegisterStrategy(NewRSIStrategy(14, 65, 35))
 		manager.RegisterStrategy(NewMACrossStrategy(5, 20, 0))
 
 		// 创建测试数据

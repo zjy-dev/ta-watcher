@@ -12,8 +12,11 @@ import (
 
 	"ta-watcher/internal/assets"
 	"ta-watcher/internal/binance"
+	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
 	"ta-watcher/internal/watcher"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -21,6 +24,7 @@ var (
 	version     = flag.Bool("version", false, "显示版本信息")
 	healthCheck = flag.Bool("health", false, "健康检查")
 	daemon      = flag.Bool("daemon", false, "后台运行模式")
+	singleRun   = flag.Bool("single-run", false, "单次运行模式（用于定时任务/云函数）")
 )
 
 const (
@@ -64,16 +68,52 @@ func run() error {
 	log.Printf("配置的币种: %v", cfg.Assets.Symbols)
 	log.Printf("监控时间框架: %v", cfg.Assets.Timeframes)
 
-	// 创建 Binance 客户端用于预检查
-	log.Println("正在连接 Binance API...")
-	binanceClient, err := binance.NewClient(&cfg.Binance)
-	if err != nil {
-		return fmt.Errorf("Binance 客户端创建失败: %w", err)
+	// 根据配置创建适当的数据源
+	log.Println("正在初始化数据源...")
+
+	// 默认使用 Binance 数据源
+	var dataSource binance.DataSource
+
+	// 检查是否配置了数据源选择
+	primarySource := "binance" // 默认值
+	if cfg.DataSource.Primary != "" {
+		primarySource = cfg.DataSource.Primary
+	}
+
+	switch primarySource {
+	case "binance":
+		log.Println("使用 Binance 数据源")
+		binanceClient, err := binance.NewClient(&cfg.Binance)
+		if err != nil {
+			return fmt.Errorf("Binance 客户端创建失败: %w", err)
+		}
+		dataSource = binanceClient
+
+	case "coinbase":
+		log.Println("使用 Coinbase 数据源（通过适配器）")
+		// 转换配置格式
+		coinbaseConfig := &coinbase.Config{
+			RateLimit: struct {
+				RequestsPerMinute int           `yaml:"requests_per_minute"`
+				RetryDelay        time.Duration `yaml:"retry_delay"`
+				MaxRetries        int           `yaml:"max_retries"`
+			}{
+				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
+				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
+				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
+			},
+		}
+		coinbaseClient := coinbase.NewClient(coinbaseConfig)
+		// 使用适配器将 Coinbase 客户端包装为 binance.DataSource 接口
+		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
+
+	default:
+		return fmt.Errorf("不支持的数据源: %s", primarySource)
 	}
 
 	// 预检查：验证所有配置的资产
 	log.Println("开始资产预检查...")
-	validator := assets.NewValidator(binanceClient, &cfg.Assets)
+	validator := assets.NewValidator(dataSource, &cfg.Assets)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -98,8 +138,8 @@ func run() error {
 
 	log.Printf("资产预检查完成，将监控 %d 个币种", len(validationResult.ValidSymbols))
 
-	// 创建 Watcher 实例，并传入验证结果
-	w, err := watcher.NewWithValidationResult(cfg, validationResult)
+	// 创建 Watcher 实例，并传入验证结果和数据源
+	w, err := watcher.NewWithValidationResultAndDataSource(cfg, validationResult, dataSource)
 	if err != nil {
 		return fmt.Errorf("Watcher 创建失败: %w", err)
 	}
@@ -112,6 +152,12 @@ func run() error {
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
 	// 启动 Watcher
+	if *singleRun {
+		// 单次运行模式：执行一次检查后退出
+		log.Println("=== 单次运行模式 ===")
+		return runSingleCheck(ctx2, w)
+	}
+
 	if err := w.Start(ctx2); err != nil {
 		return fmt.Errorf("Watcher 启动失败: %w", err)
 	}
@@ -139,6 +185,30 @@ func run() error {
 	}
 
 	log.Println("TA Watcher 已停止")
+	return nil
+}
+
+// runSingleCheck 执行单次检查
+func runSingleCheck(ctx context.Context, w *watcher.Watcher) error {
+	log.Println("开始执行单次检查...")
+
+	// 创建一个短期context，确保检查不会无限期运行
+	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	// 执行一次完整的检查周期
+	if err := w.RunSingleCheck(checkCtx); err != nil {
+		return fmt.Errorf("单次检查失败: %w", err)
+	}
+
+	// 获取统计信息
+	stats := w.GetStatistics()
+	log.Printf("=== 单次检查完成 ===")
+	log.Printf("处理任务: %d", stats.TotalTasks)
+	log.Printf("完成任务: %d", stats.CompletedTasks)
+	log.Printf("失败任务: %d", stats.FailedTasks)
+	log.Printf("发送通知: %d", stats.NotificationsSent)
+
 	return nil
 }
 
@@ -171,12 +241,54 @@ func performHealthCheck() {
 	}
 	log.Printf("✅ 配置文件存在: %s", *configPath)
 
-	// 检查配置文件格式
-	if _, err := config.LoadConfig(*configPath); err != nil {
+	// 检查配置文件格式（跳过环境变量验证）
+	if cfg, err := loadConfigForHealthCheck(*configPath); err != nil {
 		log.Printf("❌ 配置文件格式错误: %v", err)
 		os.Exit(1)
+	} else {
+		log.Printf("✅ 配置文件格式正确")
+
+		// 检查基本配置项
+		if len(cfg.Assets.Symbols) == 0 {
+			log.Printf("❌ 没有配置监控币种")
+			os.Exit(1)
+		}
+		log.Printf("✅ 配置了 %d 个监控币种", len(cfg.Assets.Symbols))
+
+		if len(cfg.Assets.Timeframes) == 0 {
+			log.Printf("❌ 没有配置监控时间框架")
+			os.Exit(1)
+		}
+		log.Printf("✅ 配置了 %d 个时间框架", len(cfg.Assets.Timeframes))
 	}
-	log.Printf("✅ 配置文件格式正确")
 
 	log.Printf("✅ 健康检查完成")
+}
+
+// loadConfigForHealthCheck 为健康检查加载配置（跳过环境变量验证）
+func loadConfigForHealthCheck(filename string) (*config.Config, error) {
+	// 检查文件是否存在
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		return nil, fmt.Errorf("config file not found: %s", filename)
+	}
+
+	// 读取文件内容
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	// 解析 YAML
+	cfg := config.DefaultConfig()
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
+	}
+
+	// 健康检查时跳过环境变量展开和完整验证
+	// 只验证基本结构
+	if err := cfg.Assets.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid assets config: %w", err)
+	}
+
+	return cfg, nil
 }

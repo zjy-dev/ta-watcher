@@ -1,0 +1,52 @@
+# Railway.app configuration
+# https://railway.app/
+
+# Railway automatically detects Dockerfile and builds the app
+# This file configures deployment settings
+
+# Build configuration
+[build]
+# Use cloud-optimized Dockerfile
+dockerfile = "Dockerfile.cloud"
+
+# Service configuration
+[deploy]
+# Enable cron job mode (Railway supports cron jobs)
+startCommand = "/ta-watcher --single-run --config /config.yaml"
+
+# Health check
+healthcheckPath = "/health"
+
+# Resource limits
+memory = 512
+cpu = 500
+
+# Restart policy
+restartPolicyType = "never"
+
+# Environment variables
+[env]
+TZ = "UTC"
+LOG_LEVEL = "info"
+
+# Required: Email settings (set in Railway dashboard)
+# SMTP_HOST = "smtp.gmail.com"
+# SMTP_USERNAME = "your-email@gmail.com"
+# SMTP_PASSWORD = "your-app-password"
+# FROM_EMAIL = "your-email@gmail.com"
+# TO_EMAIL = "recipient@example.com"
+
+# Optional: Webhook notifications
+# FEISHU_WEBHOOK_URL = "https://open.feishu.cn/open-apis/bot/v2/hook/..."
+# WECHAT_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."
+
+# Cron job configuration (Railway Pro feature)
+[cron]
+# Run twice daily: 6AM and 6PM Beijing Time (22:00 and 10:00 UTC)
+schedule = "0 10,22 * * *"
+
+# Alternative schedules:
+# Every 15 minutes: "*/15 * * * *"
+# Every hour: "0 * * * *"
+# Every 4 hours: "0 */4 * * *"
+# Twice daily: "0 8,20 * * *"

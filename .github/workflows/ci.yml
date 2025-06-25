@@ -1,0 +1,193 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [single-run, main]
+  pull_request:
+    branches: [single-run, main]
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run make test-all
+        run: make test-all
+
+      - name: Build application
+        run: make build
+
+      - name: Test health check
+        run: ./bin/ta-watcher -health -config config.example.yaml
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: |
+            coverage.out
+            coverage.html
+          retention-days: 7
+
+  # 配置测试（手动触发或secrets变更后）
+  config-test:
+    name: Test Configuration & Secrets
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[test-config]')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build application
+        run: go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher
+
+      - name: Test Configuration & Secrets
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+          TZ: UTC
+          LOG_LEVEL: debug
+        run: |
+          echo "=== Testing TA Watcher Configuration ==="
+
+          # Check if secrets are available
+          echo "📋 Checking secrets availability..."
+          if [ -z "$SMTP_HOST" ]; then echo "❌ SMTP_HOST not set"; else echo "✅ SMTP_HOST configured: $SMTP_HOST"; fi
+          if [ -z "$SMTP_USERNAME" ]; then echo "❌ SMTP_USERNAME not set"; else echo "✅ SMTP_USERNAME configured: ${SMTP_USERNAME:0:3}***"; fi
+          if [ -z "$SMTP_PASSWORD" ]; then echo "❌ SMTP_PASSWORD not set"; else echo "✅ SMTP_PASSWORD configured (hidden)"; fi
+          if [ -z "$FROM_EMAIL" ]; then echo "❌ FROM_EMAIL not set"; else echo "✅ FROM_EMAIL configured: $FROM_EMAIL"; fi
+          if [ -z "$TO_EMAIL" ]; then echo "❌ TO_EMAIL not set"; else echo "✅ TO_EMAIL configured: $TO_EMAIL"; fi
+
+          # Test health check
+          echo -e "\n🔍 Testing Health Check..."
+          ./bin/ta-watcher -health -config config.example.yaml
+
+          # Test version
+          echo -e "\n📋 Testing Version..."
+          ./bin/ta-watcher -version
+
+          # Check config file validity
+          echo -e "\n⚙️  Validating Configuration File..."
+          if ./bin/ta-watcher -health -config config.example.yaml; then
+            echo "✅ Configuration file is valid"
+          else
+            echo "❌ Configuration file has issues"
+            exit 1
+          fi
+
+          echo -e "\n🎉 Configuration Test Complete!"
+
+  # Push后立即运行一次（仅在single-run分支）
+  immediate-run:
+    name: Immediate Run After Push
+    runs-on: ubuntu-latest
+    needs: test # 等待测试通过
+    if: github.ref == 'refs/heads/single-run' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build application
+        run: go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher
+
+      - name: Run TA Watcher (Immediate After Push)
+        env:
+          # Email configuration (set these as repository secrets)
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          FROM_EMAIL: ${{ secrets.FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.TO_EMAIL }}
+
+          # Optional webhook configurations
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          WECHAT_WEBHOOK_URL: ${{ secrets.WECHAT_WEBHOOK_URL }}
+
+          # App settings
+          TZ: UTC
+          LOG_LEVEL: info
+        run: |
+          echo "🚀 Running TA Watcher immediately after push at $(date)"
+
+          # Check if secrets are available
+          if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USERNAME" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$FROM_EMAIL" ] || [ -z "$TO_EMAIL" ]; then
+            echo "⚠️  Warning: Email secrets not configured, skipping immediate run"
+            echo "Configure secrets to enable immediate execution after push"
+            exit 0
+          fi
+
+          echo "✅ All required secrets are configured"
+          echo "📧 Email notifications will be sent to: ${TO_EMAIL}"
+
+          ./bin/ta-watcher --single-run --config config.example.yaml
+
+          echo "✅ Immediate run completed at $(date)"
+          echo "⏰ Next scheduled runs: Beijing Time 06:00 and 18:00 daily"
+
+      - name: Upload logs (immediate run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: immediate-run-logs-${{ github.run_number }}
+          path: logs/
+          retention-days: 7
+          if-no-files-found: ignore

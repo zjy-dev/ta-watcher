@@ -50,6 +50,12 @@ help: ## 显示帮助信息
 	@echo "  $(COLOR_GREEN)compose-logs$(COLOR_RESET)        查看服务日志"
 	@echo "  $(COLOR_GREEN)compose-ps$(COLOR_RESET)          查看服务状态"
 	@echo "  $(COLOR_GREEN)compose-clean$(COLOR_RESET)        清理 Docker 资源"
+	@echo ""
+	@echo "$(COLOR_BOLD)云部署命令:$(COLOR_RESET)"
+	@echo "  $(COLOR_GREEN)build-cloud$(COLOR_RESET)         构建云优化版本"
+	@echo "  $(COLOR_GREEN)test-single-run$(COLOR_RESET)     测试单次运行模式"
+	@echo "  $(COLOR_GREEN)docker-test-single-run$(COLOR_RESET) Docker 测试单次运行模式"
+	@echo "  $(COLOR_GREEN)cloud-compose-test$(COLOR_RESET)   测试云部署 Docker Compose"
 
 .PHONY: test-all
 test-all: ## 运行所有测试（包括集成测试）
@@ -342,6 +348,31 @@ compose-clean: ## 清理 Docker Compose 资源
 	@docker-compose down -v --remove-orphans || true
 	@docker system prune -f
 	@echo "$(COLOR_GREEN)✅ Docker 资源清理完成！$(COLOR_RESET)"
+
+# 云部署相关命令
+.PHONY: build-cloud
+build-cloud: ## 构建云优化版本
+	@echo "$(COLOR_BOLD)☁️ 构建云部署版本...$(COLOR_RESET)"
+	@docker build -f Dockerfile.cloud -t ta-watcher-cloud:latest .
+	@echo "$(COLOR_GREEN)✅ 云版本构建完成！$(COLOR_RESET)"
+
+.PHONY: test-single-run
+test-single-run: build ## 测试单次运行模式
+	@echo "$(COLOR_BOLD)🎯 测试单次运行模式...$(COLOR_RESET)"
+	@./bin/$(BINARY_NAME) --single-run --config config.yaml
+	@echo "$(COLOR_GREEN)✅ 单次运行测试完成！$(COLOR_RESET)"
+
+.PHONY: docker-test-single-run
+docker-test-single-run: build-cloud ## Docker 测试单次运行模式
+	@echo "$(COLOR_BOLD)🐳 Docker 单次运行测试...$(COLOR_RESET)"
+	@docker run --rm -v $(PWD)/config.yaml:/config.yaml ta-watcher-cloud:latest
+	@echo "$(COLOR_GREEN)✅ Docker 单次运行测试完成！$(COLOR_RESET)"
+
+.PHONY: cloud-compose-test
+cloud-compose-test: ## 测试云部署 Docker Compose
+	@echo "$(COLOR_BOLD)🌩️ 测试云部署配置...$(COLOR_RESET)"
+	@docker-compose -f docker-compose.cloud.yml run --rm ta-watcher-cron
+	@echo "$(COLOR_GREEN)✅ 云部署测试完成！$(COLOR_RESET)"
 
 # 默认目标
 .DEFAULT_GOAL := help

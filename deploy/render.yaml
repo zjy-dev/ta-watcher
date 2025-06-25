@@ -1,0 +1,49 @@
+# Render.com configuration
+# https://render.com/
+
+# render.yaml - Infrastructure as Code for Render
+services:
+  - type: cron
+    name: ta-watcher
+    runtime: docker
+    
+    # Docker configuration
+    dockerfilePath: ./Dockerfile.cloud
+    dockerContext: .
+    
+    # Cron schedule (twice daily: 6AM and 6PM Beijing Time)
+    schedule: "0 10,22 * * *"
+    
+    # Resource configuration
+    plan: starter  # Free tier
+    
+    # Environment variables
+    envVars:
+      - key: TZ
+        value: UTC
+      - key: LOG_LEVEL
+        value: info
+      
+      # Email configuration (set these in Render dashboard)
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_USERNAME
+        sync: false  # Set manually in dashboard
+      - key: SMTP_PASSWORD
+        sync: false  # Set manually in dashboard
+      - key: FROM_EMAIL
+        sync: false  # Set manually in dashboard
+      - key: TO_EMAIL
+        sync: false  # Set manually in dashboard
+      
+      # Optional webhook configurations
+      - key: FEISHU_WEBHOOK_URL
+        sync: false
+      - key: WECHAT_WEBHOOK_URL
+        sync: false
+    
+    # Build command override
+    buildCommand: echo "Using Dockerfile.cloud"
+    
+    # Start command
+    startCommand: "/ta-watcher --single-run --config /config.yaml"

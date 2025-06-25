@@ -10,6 +10,16 @@ import (
 
 func TestNew(t *testing.T) {
 	cfg := &config.Config{
+		DataSource: config.DataSourceConfig{
+			Primary: "coinbase",
+			Coinbase: config.CoinbaseConfig{
+				RateLimit: config.RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: config.BinanceConfig{
 			RateLimit: config.RateLimitConfig{
 				RequestsPerMinute: 100,
@@ -46,6 +56,16 @@ func TestNew(t *testing.T) {
 
 func TestWatcher_StartStop(t *testing.T) {
 	cfg := &config.Config{
+		DataSource: config.DataSourceConfig{
+			Primary: "coinbase",
+			Coinbase: config.CoinbaseConfig{
+				RateLimit: config.RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: config.BinanceConfig{
 			RateLimit: config.RateLimitConfig{
 				RequestsPerMinute: 100,
@@ -96,6 +116,16 @@ func TestWatcher_StartStop(t *testing.T) {
 
 func TestWatcher_GetHealth(t *testing.T) {
 	cfg := &config.Config{
+		DataSource: config.DataSourceConfig{
+			Primary: "coinbase",
+			Coinbase: config.CoinbaseConfig{
+				RateLimit: config.RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: config.BinanceConfig{
 			RateLimit: config.RateLimitConfig{
 				RequestsPerMinute: 100,
@@ -129,6 +159,16 @@ func TestWatcher_GetHealth(t *testing.T) {
 
 func TestWatcher_GetStatistics(t *testing.T) {
 	cfg := &config.Config{
+		DataSource: config.DataSourceConfig{
+			Primary: "coinbase",
+			Coinbase: config.CoinbaseConfig{
+				RateLimit: config.RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: config.BinanceConfig{
 			RateLimit: config.RateLimitConfig{
 				RequestsPerMinute: 100,

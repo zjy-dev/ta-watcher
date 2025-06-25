@@ -1,0 +1,78 @@
+# Cloud deployment docker-compose for testing
+# This simulates cloud cron job execution
+version: "3.8"
+
+services:
+  ta-watcher-cron:
+    build:
+      context: .
+      dockerfile: Dockerfile.cloud
+    environment:
+      # Binance API (public endpoints, no keys needed)
+      - BINANCE_API_URL=https://api.binance.com
+
+      # Email notification settings (from environment)
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_USERNAME=${SMTP_USERNAME}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - FROM_EMAIL=${FROM_EMAIL}
+      - TO_EMAIL=${TO_EMAIL}
+
+      # Webhook notifications (optional)
+      - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL}
+      - FEISHU_SECRET=${FEISHU_SECRET}
+      - WECHAT_WEBHOOK_URL=${WECHAT_WEBHOOK_URL}
+
+      # App settings
+      - TZ=UTC
+      - LOG_LEVEL=info
+
+    # Restart policy for cloud-like behavior
+    restart: "no"
+
+    # Resource limits (similar to cloud function limits)
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+          cpus: "0.1"
+
+    # Volume for logs (optional)
+    volumes:
+      - ./logs:/app/logs
+
+    # Network mode
+    network_mode: bridge
+
+    # Command override for testing
+    command: ["--single-run", "--config", "/config.yaml"]
+
+  # Optional: Add a scheduler service for testing cron-like behavior
+  scheduler:
+    image: alpine:latest
+    command: >
+      sh -c "
+        apk add --no-cache docker-compose &&
+        echo 'Simulating twice-daily execution (6AM and 6PM Beijing Time)' &&
+        while true; do
+          echo 'Running scheduled check at $(date)...' &&
+          docker-compose run --rm ta-watcher-cron &&
+          echo 'Waiting 12 hours for next run (simulated as 60 seconds for testing)...' &&
+          sleep 60
+        done
+      "
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/app
+    working_dir: /app
+    depends_on:
+      - ta-watcher-cron
+    profiles:
+      - scheduler # Only run when --profile scheduler is specified
+
+networks:
+  default:
+    driver: bridge

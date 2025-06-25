@@ -3,7 +3,7 @@ name: TA Watcher Scheduled Run
 on:
   schedule:
     # Run twice daily: 6AM and 6PM Beijing Time (22:00 and 10:00 UTC)
-    - cron: "0 10,22 * * *"
+    - cron: "42 10,22 * * *"
 
   # Allow manual trigger for testing (but not immediate after push)
   workflow_dispatch:

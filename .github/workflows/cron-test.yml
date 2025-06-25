@@ -4,7 +4,6 @@ on:
   schedule:
     # 测试：5分钟后运行（请在测试后删除此文件）
     - cron: "24 09 * * *"
-  workflow_dispatch:
 
 jobs:
   test-cron:

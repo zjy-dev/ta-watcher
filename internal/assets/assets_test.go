@@ -169,52 +169,105 @@ func TestRateCalculator_CalculateRate(t *testing.T) {
 	ctx := context.Background()
 	baseTime := time.Now().Truncate(time.Hour)
 
-	// 模拟 BTC/USDT 数据
-	btcKlines := []*binance.KlineData{
-		{
+	// 创建30个数据点以满足最小要求
+	btcKlines := make([]*binance.KlineData, 30)
+	ethKlines := make([]*binance.KlineData, 30)
+
+	for i := 0; i < 30; i++ {
+		timestamp := baseTime.Add(time.Duration(i) * time.Hour)
+
+		btcKlines[i] = &binance.KlineData{
 			Symbol:    "BTCUSDT",
-			OpenTime:  baseTime,
-			CloseTime: baseTime.Add(time.Hour),
-			Open:      50000.0,
-			High:      52000.0,
-			Low:       49000.0,
-			Close:     51000.0,
-		},
-	}
+			OpenTime:  timestamp,
+			CloseTime: timestamp.Add(time.Hour),
+			Open:      50000.0 + float64(i*100),
+			High:      52000.0 + float64(i*100),
+			Low:       49000.0 + float64(i*100),
+			Close:     51000.0 + float64(i*100),
+		}
 
-	// 模拟 ETH/USDT 数据
-	ethKlines := []*binance.KlineData{
-		{
+		ethKlines[i] = &binance.KlineData{
 			Symbol:    "ETHUSDT",
-			OpenTime:  baseTime,
-			CloseTime: baseTime.Add(time.Hour),
-			Open:      2500.0,
-			High:      2600.0,
-			Low:       2400.0,
-			Close:     2550.0,
-		},
+			OpenTime:  timestamp,
+			CloseTime: timestamp.Add(time.Hour),
+			Open:      2500.0 + float64(i*10),
+			High:      2600.0 + float64(i*10),
+			Low:       2400.0 + float64(i*10),
+			Close:     2550.0 + float64(i*10),
+		}
 	}
 
-	mockClient.On("GetKlines", ctx, "BTCUSDT", "1h", 1).Return(btcKlines, nil)
-	mockClient.On("GetKlines", ctx, "ETHUSDT", "1h", 1).Return(ethKlines, nil)
+	mockClient.On("GetKlines", ctx, "BTCUSDT", "1h", 200).Return(btcKlines, nil)
+	mockClient.On("GetKlines", ctx, "ETHUSDT", "1h", 200).Return(ethKlines, nil)
 
 	// 执行汇率计算 - 注意：ETH在前，BTC在后，符合交易所约定（ETHBTC）
 	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", "1h", 1)
 
 	// 验证结果
 	require.NoError(t, err)
-	require.Len(t, result, 1)
+	require.Len(t, result, 1) // 只返回1个数据点（最新的）
 
 	rate := result[0]
 	assert.Equal(t, "ETHBTC", rate.Symbol)
-	assert.Equal(t, baseTime, rate.OpenTime)
 
 	// 验证汇率计算: ETH/BTC = (ETH/USDT) / (BTC/USDT)
-	expectedOpen := 2500.0 / 50000.0  // 0.05
-	expectedClose := 2550.0 / 51000.0 // 约0.05
+	// 使用最后一个数据点进行验证
+	lastETH := ethKlines[29]
+	lastBTC := btcKlines[29]
+	expectedOpen := lastETH.Open / lastBTC.Open
+	expectedClose := lastETH.Close / lastBTC.Close
 
-	assert.InDelta(t, expectedOpen, rate.Open, 0.01)
-	assert.InDelta(t, expectedClose, rate.Close, 0.01)
+	assert.InDelta(t, expectedOpen, rate.Open, 0.0001)
+	assert.InDelta(t, expectedClose, rate.Close, 0.0001)
+
+	mockClient.AssertExpectations(t)
+}
+
+func TestRateCalculator_CalculateRate_InsufficientData(t *testing.T) {
+	mockClient := new(MockDataSource)
+	calculator := NewRateCalculator(mockClient)
+
+	ctx := context.Background()
+	baseTime := time.Now().Truncate(time.Hour)
+
+	// 创建只有5个数据点的数据（不足30个）
+	btcKlines := make([]*binance.KlineData, 5)
+	ethKlines := make([]*binance.KlineData, 5)
+
+	for i := 0; i < 5; i++ {
+		timestamp := baseTime.Add(time.Duration(i) * time.Hour)
+
+		btcKlines[i] = &binance.KlineData{
+			Symbol:    "BTCUSDT",
+			OpenTime:  timestamp,
+			CloseTime: timestamp.Add(time.Hour),
+			Open:      50000.0 + float64(i*100),
+			High:      52000.0 + float64(i*100),
+			Low:       49000.0 + float64(i*100),
+			Close:     51000.0 + float64(i*100),
+		}
+
+		ethKlines[i] = &binance.KlineData{
+			Symbol:    "ETHUSDT",
+			OpenTime:  timestamp,
+			CloseTime: timestamp.Add(time.Hour),
+			Open:      2500.0 + float64(i*10),
+			High:      2600.0 + float64(i*10),
+			Low:       2400.0 + float64(i*10),
+			Close:     2550.0 + float64(i*10),
+		}
+	}
+
+	mockClient.On("GetKlines", ctx, "BTCUSDT", "1h", 200).Return(btcKlines, nil)
+	mockClient.On("GetKlines", ctx, "ETHUSDT", "1h", 200).Return(ethKlines, nil)
+
+	// 执行汇率计算，应该失败
+	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", "1h", 1)
+
+	// 验证结果：应该返回错误
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Contains(t, err.Error(), "insufficient kline data for rate calculation")
 
 	mockClient.AssertExpectations(t)
 }

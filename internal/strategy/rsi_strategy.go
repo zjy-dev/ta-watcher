@@ -52,7 +52,14 @@ func (s *RSIStrategy) Description() string {
 
 // RequiredDataPoints 返回所需数据点
 func (s *RSIStrategy) RequiredDataPoints() int {
-	return s.period + 1 // RSI需要额外的数据点来计算
+	// RSI需要足够的数据来保证计算准确性
+	// 基本需求：period + 1
+	// 为了稳定性，我们要求至少30个数据点
+	baseRequirement := s.period + 1
+	if baseRequirement < 30 {
+		return 30
+	}
+	return baseRequirement + 15 // 额外缓冲
 }
 
 // SupportedTimeframes 返回支持的时间框架

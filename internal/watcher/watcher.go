@@ -344,9 +344,9 @@ func (w *Watcher) processAssetTimeframe(pair, timeframe string, strategies []str
 
 	// 检查是否为计算汇率对
 	if w.validationResult != nil && w.isCalculatedPair(pair) {
-		klines, err = w.getCalculatedKlines(ctx, pair, timeframe, 100)
+		klines, err = w.getCalculatedKlines(ctx, pair, timeframe, 200) // 增加到200以确保足够数据
 	} else {
-		klines, err = w.dataSource.GetKlines(ctx, pair, timeframe, 100)
+		klines, err = w.dataSource.GetKlines(ctx, pair, timeframe, 200) // 增加到200以确保足够数据
 	}
 
 	if err != nil {
@@ -362,6 +362,14 @@ func (w *Watcher) processAssetTimeframe(pair, timeframe string, strategies []str
 		strategyObj, err := w.strategy.GetStrategy(strategyName)
 		if err != nil {
 			log.Printf("Failed to get strategy %s: %v", strategyName, err)
+			continue
+		}
+
+		// 检查数据点是否足够
+		requiredDataPoints := strategyObj.RequiredDataPoints()
+		if len(klines) < requiredDataPoints {
+			log.Printf("⚠️ %s [%s] 数据不足，需要 %d 个数据点，实际只有 %d 个，跳过策略 %s",
+				pair, timeframe, requiredDataPoints, len(klines), strategyName)
 			continue
 		}
 

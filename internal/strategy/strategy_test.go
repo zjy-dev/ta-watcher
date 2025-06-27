@@ -43,7 +43,7 @@ func TestRSIStrategy(t *testing.T) {
 	t.Run("Basic Properties", func(t *testing.T) {
 		assert.Equal(t, "RSI_14_65_35", strategy.Name())
 		assert.Contains(t, strategy.Description(), "RSI")
-		assert.Equal(t, 15, strategy.RequiredDataPoints()) // 14 + 1
+		assert.Equal(t, 30, strategy.RequiredDataPoints()) // RSI策略现在要求最少30个数据点
 		assert.NotEmpty(t, strategy.SupportedTimeframes())
 	})
 

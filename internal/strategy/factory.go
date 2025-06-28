@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"ta-watcher/internal/datasource"
 	"ta-watcher/internal/indicators"
 )
 
@@ -306,21 +307,21 @@ func (f *Factory) UnregisterPreset(name string) error {
 }
 
 // CreateRecommendedStrategy 根据时间框架创建推荐策略
-func (f *Factory) CreateRecommendedStrategy(timeframe Timeframe) (Strategy, error) {
+func (f *Factory) CreateRecommendedStrategy(timeframe datasource.Timeframe) (Strategy, error) {
 	switch timeframe {
-	case Timeframe1m, Timeframe3m, Timeframe5m:
+	case datasource.Timeframe1m, datasource.Timeframe3m, datasource.Timeframe5m:
 		// 超短线时间框架，使用快速响应策略
 		return f.CreateStrategy("scalping_combo")
 
-	case Timeframe15m, Timeframe30m:
+	case datasource.Timeframe15m, datasource.Timeframe30m:
 		// 短线时间框架，使用平衡策略
 		return f.CreateStrategy("balanced_combo")
 
-	case Timeframe1h, Timeframe2h, Timeframe4h:
+	case datasource.Timeframe1h, datasource.Timeframe2h, datasource.Timeframe4h:
 		// 中线时间框架，使用共识策略
 		return f.CreateStrategy("consensus_combo")
 
-	case Timeframe6h, Timeframe12h, Timeframe1d:
+	case datasource.Timeframe6h, datasource.Timeframe12h, datasource.Timeframe1d:
 		// 中长线时间框架，使用稳健策略
 		combo := NewMultiStrategy("中长线组合", "适合中长线投资的策略组合")
 		combo.AddSubStrategy(NewRSIStrategy(14, 75, 25))
@@ -328,7 +329,7 @@ func (f *Factory) CreateRecommendedStrategy(timeframe Timeframe) (Strategy, erro
 		combo.AddSubStrategy(NewMACDStrategy(12, 26, 9))
 		return combo, nil
 
-	case Timeframe3d, Timeframe1w:
+	case datasource.Timeframe3d, datasource.Timeframe1w:
 		// 长线时间框架，使用长期趋势策略
 		combo := NewMultiStrategy("长线趋势组合", "适合长期趋势投资的策略组合")
 		combo.AddSubStrategy(NewRSIStrategy(14, 80, 20))
@@ -336,7 +337,7 @@ func (f *Factory) CreateRecommendedStrategy(timeframe Timeframe) (Strategy, erro
 		combo.AddSubStrategy(NewMACDStrategy(26, 52, 18))
 		return combo, nil
 
-	case Timeframe1M:
+	case datasource.Timeframe1M:
 		// 月线时间框架，使用超长期价值投资策略
 		combo := NewMultiStrategy("价值投资组合", "适合价值投资的超长期策略")
 		combo.AddSubStrategy(NewRSIStrategy(14, 85, 15))                 // 更极端的超买超卖水平

@@ -9,13 +9,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"ta-watcher/internal/assets"
-	"ta-watcher/internal/binance"
-	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
+	"ta-watcher/internal/datasource"
 	"ta-watcher/internal/watcher"
 
 	"gopkg.in/yaml.v3"
@@ -68,90 +68,16 @@ func run() error {
 
 	log.Printf("=== %s v%s 启动中 ===", AppName, AppVersion)
 	log.Printf("配置文件: %s", *configPath)
-	log.Printf("监控间隔: %v", cfg.Watcher.Interval)
-	log.Printf("工作协程: %d", cfg.Watcher.MaxWorkers)
-	log.Printf("配置的币种: %v", cfg.Assets.Symbols)
-	log.Printf("监控时间框架: %v", cfg.Assets.Timeframes)
 
-	// 根据配置创建适当的数据源
-	log.Println("正在初始化数据源...")
-
-	// 默认使用 Binance 数据源
-	var dataSource binance.DataSource
-
-	// 检查是否配置了数据源选择
-	primarySource := "binance" // 默认值
-	if cfg.DataSource.Primary != "" {
-		primarySource = cfg.DataSource.Primary
-	}
-
-	switch primarySource {
-	case "binance":
-		log.Println("使用 Binance 数据源")
-		binanceClient, err := binance.NewClient(&cfg.Binance)
-		if err != nil {
-			return fmt.Errorf("Binance 客户端创建失败: %w", err)
-		}
-		dataSource = binanceClient
-
-	case "coinbase":
-		log.Println("使用 Coinbase 数据源（通过适配器）")
-		// 转换配置格式
-		coinbaseConfig := &coinbase.Config{
-			RateLimit: struct {
-				RequestsPerMinute int           `yaml:"requests_per_minute"`
-				RetryDelay        time.Duration `yaml:"retry_delay"`
-				MaxRetries        int           `yaml:"max_retries"`
-			}{
-				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
-				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
-				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
-			},
-		}
-		coinbaseClient := coinbase.NewClient(coinbaseConfig)
-		// 使用适配器将 Coinbase 客户端包装为 binance.DataSource 接口
-		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
-
-	default:
-		return fmt.Errorf("不支持的数据源: %s", primarySource)
-	}
-
-	// 预检查：验证所有配置的资产
-	log.Println("开始资产预检查...")
-	validator := assets.NewValidator(dataSource, &cfg.Assets)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	validationResult, err := validator.ValidateAssets(ctx)
-	if err != nil {
-		return fmt.Errorf("资产验证失败: %w", err)
-	}
-
-	// 显示验证结果
-	log.Println(validationResult.Summary())
-
-	// 如果有缺失的币种，给出警告但继续运行
-	if len(validationResult.MissingSymbols) > 0 {
-		log.Printf("警告: 以下币种将被跳过: %v", validationResult.MissingSymbols)
-	}
-
-	// 确保至少有一个有效币种
-	if len(validationResult.ValidSymbols) == 0 {
-		return fmt.Errorf("没有找到任何有效的监控币种，请检查配置")
-	}
-
-	log.Printf("资产预检查完成，将监控 %d 个币种", len(validationResult.ValidSymbols))
-
-	// 创建 Watcher 实例，并传入验证结果和数据源
-	w, err := watcher.NewWithValidationResultAndDataSource(cfg, validationResult, dataSource)
+	// 创建新架构的 Watcher
+	w, err := watcher.New(cfg)
 	if err != nil {
 		return fmt.Errorf("Watcher 创建失败: %w", err)
 	}
 
 	// 设置信号处理
-	ctx2, cancel2 := context.WithCancel(context.Background())
-	defer cancel2()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -160,17 +86,19 @@ func run() error {
 	if *singleRun {
 		// 单次运行模式：执行一次检查后退出
 		log.Println("=== 单次运行模式 ===")
-		return runSingleCheck(ctx2, w)
+		return runSingleCheck(ctx, w, cfg)
 	}
 
-	if err := w.Start(ctx2); err != nil {
-		return fmt.Errorf("Watcher 启动失败: %w", err)
-	}
+	// 启动监控
+	go func() {
+		if err := w.Start(ctx); err != nil {
+			log.Printf("Watcher 运行错误: %v", err)
+		}
+	}()
 
 	// 如果是后台模式，不阻塞主线程
 	if *daemon {
 		log.Println("后台模式启动完成")
-		// 在实际应用中，这里应该实现守护进程逻辑
 		select {}
 	}
 
@@ -185,35 +113,101 @@ func run() error {
 	log.Println("收到停止信号，正在关闭...")
 
 	// 停止 Watcher
-	if err := w.Stop(); err != nil {
-		log.Printf("Watcher 停止失败: %v", err)
-	}
+	w.Stop()
 
 	log.Println("TA Watcher 已停止")
 	return nil
 }
 
 // runSingleCheck 执行单次检查
-func runSingleCheck(ctx context.Context, w *watcher.Watcher) error {
-	log.Println("开始执行单次检查...")
+func runSingleCheck(ctx context.Context, w *watcher.Watcher, cfg *config.Config) error {
+	log.Println("🔍 开始执行单次检查...")
 
 	// 创建一个短期context，确保检查不会无限期运行
 	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// 执行一次完整的检查周期
-	if err := w.RunSingleCheck(checkCtx); err != nil {
-		return fmt.Errorf("单次检查失败: %w", err)
+	// 1. 首先进行资产验证
+	log.Println("📋 开始资产验证...")
+	factory := datasource.NewFactory()
+	dataSource, err := factory.CreateDataSource(cfg.DataSource.Primary, cfg)
+	if err != nil {
+		return fmt.Errorf("创建数据源失败: %w", err)
 	}
 
-	// 获取统计信息
-	stats := w.GetStatistics()
-	log.Printf("=== 单次检查完成 ===")
-	log.Printf("处理任务: %d", stats.TotalTasks)
-	log.Printf("完成任务: %d", stats.CompletedTasks)
-	log.Printf("失败任务: %d", stats.FailedTasks)
-	log.Printf("发送通知: %d", stats.NotificationsSent)
+	validator := assets.NewValidator(dataSource, &cfg.Assets)
+	validationResult, err := validator.ValidateAssets(checkCtx)
+	if err != nil {
+		log.Printf("❌ 资产验证失败: %v", err)
+	} else {
+		// 输出详细的资产验证日志
+		log.Printf("✅ 资产验证完成:")
+		log.Printf("  - 有效币种: %d 个 %v", len(validationResult.ValidSymbols), validationResult.ValidSymbols)
+		log.Printf("  - 有效交易对: %d 个 %v", len(validationResult.ValidPairs), validationResult.ValidPairs)
+		log.Printf("  - 计算得出的对: %d 个 %v", len(validationResult.CalculatedPairs), validationResult.CalculatedPairs)
+		if len(validationResult.MissingSymbols) > 0 {
+			log.Printf("  - 缺失币种: %d 个 %v", len(validationResult.MissingSymbols), validationResult.MissingSymbols)
+		}
+		log.Printf("  - 支持的时间框架: %v", validationResult.SupportedTimeframes)
+	}
 
+	// 2. 解析时间框架
+	var timeframes []datasource.Timeframe
+	for _, tfStr := range cfg.Assets.Timeframes {
+		tf := datasource.Timeframe(tfStr)
+		// 简单验证时间框架是否有效
+		if isValidTimeframe(tf) {
+			timeframes = append(timeframes, tf)
+		} else {
+			log.Printf("⚠️ 无效的时间框架: %s", tfStr)
+		}
+	}
+
+	if len(timeframes) == 0 {
+		log.Println("⚠️ 没有有效的时间框架，使用默认值")
+		timeframes = []datasource.Timeframe{datasource.Timeframe1h}
+	}
+
+	// 3. 使用验证过的交易对进行策略分析
+	symbols := cfg.Assets.Symbols
+	if validationResult != nil {
+		// 使用所有验证通过的交易对，包括基础货币对和币币交易对
+		symbols = make([]string, 0)
+
+		// 添加基础货币对（如 BTCUSDT）
+		for _, symbol := range validationResult.ValidSymbols {
+			basePair := symbol + cfg.Assets.BaseCurrency
+			symbols = append(symbols, basePair)
+		}
+
+		// 添加所有验证通过的币币交易对（如 ETHBTC）
+		for _, pair := range validationResult.ValidPairs {
+			// 避免重复添加基础货币对
+			if !strings.HasSuffix(pair, cfg.Assets.BaseCurrency) {
+				symbols = append(symbols, pair)
+			}
+		}
+
+		// 添加所有计算得出的汇率对（如 ADASOL）
+		for _, pair := range validationResult.CalculatedPairs {
+			symbols = append(symbols, pair)
+		}
+
+		log.Printf("📊 策略分析将包含：")
+		log.Printf("  - 基础货币对: %d 个", len(validationResult.ValidSymbols))
+		log.Printf("  - 币币交易对: %d 个", len(validationResult.ValidPairs)-len(validationResult.ValidSymbols))
+		log.Printf("  - 计算汇率对: %d 个", len(validationResult.CalculatedPairs))
+		log.Printf("  - 总交易对: %d 个", len(symbols))
+	}
+
+	log.Printf("🎯 开始策略分析 - %d 个交易对，%d 个时间框架", len(symbols), len(timeframes))
+
+	// 4. 调用 watcher 的 RunSingleCheck 进行策略分析
+	if err := w.RunSingleCheck(checkCtx, symbols, timeframes); err != nil {
+		return fmt.Errorf("策略分析失败: %w", err)
+	}
+
+	log.Println("=== 单次检查完成 ===")
 	return nil
 }
 
@@ -223,15 +217,11 @@ func statusReporter(w *watcher.Watcher) {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		health := w.GetHealth()
-		stats := w.GetStatistics()
-
+		status := w.GetStatus()
 		log.Printf("=== 状态报告 ===")
-		log.Printf("运行时间: %v", health.Uptime)
-		log.Printf("总任务: %d", stats.TotalTasks)
-		log.Printf("完成任务: %d", stats.CompletedTasks)
-		log.Printf("失败任务: %d", stats.FailedTasks)
-		log.Printf("发送通知: %d", stats.NotificationsSent)
+		log.Printf("运行状态: %t", status["running"])
+		log.Printf("数据源: %s", status["data_source"])
+		log.Printf("策略数量: %d", status["strategies"])
 	}
 }
 
@@ -247,24 +237,11 @@ func performHealthCheck() {
 	log.Printf("✅ 配置文件存在: %s", *configPath)
 
 	// 检查配置文件格式（跳过环境变量验证）
-	if cfg, err := loadConfigForHealthCheck(*configPath); err != nil {
+	if _, err := loadConfigForHealthCheck(*configPath); err != nil {
 		log.Printf("❌ 配置文件格式错误: %v", err)
 		os.Exit(1)
 	} else {
 		log.Printf("✅ 配置文件格式正确")
-
-		// 检查基本配置项
-		if len(cfg.Assets.Symbols) == 0 {
-			log.Printf("❌ 没有配置监控币种")
-			os.Exit(1)
-		}
-		log.Printf("✅ 配置了 %d 个监控币种", len(cfg.Assets.Symbols))
-
-		if len(cfg.Assets.Timeframes) == 0 {
-			log.Printf("❌ 没有配置监控时间框架")
-			os.Exit(1)
-		}
-		log.Printf("✅ 配置了 %d 个时间框架", len(cfg.Assets.Timeframes))
 	}
 
 	log.Printf("✅ 健康检查完成")
@@ -319,11 +296,33 @@ func loadConfigForHealthCheck(filename string) (*config.Config, error) {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
-	// 健康检查时跳过环境变量展开和完整验证
-	// 只验证基本结构
-	if err := cfg.Assets.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid assets config: %w", err)
+	return cfg, nil
+}
+
+// isValidTimeframe 检查时间框架是否有效
+func isValidTimeframe(tf datasource.Timeframe) bool {
+	validTimeframes := []datasource.Timeframe{
+		datasource.Timeframe1m,
+		datasource.Timeframe3m,
+		datasource.Timeframe5m,
+		datasource.Timeframe15m,
+		datasource.Timeframe30m,
+		datasource.Timeframe1h,
+		datasource.Timeframe2h,
+		datasource.Timeframe4h,
+		datasource.Timeframe6h,
+		datasource.Timeframe8h,
+		datasource.Timeframe12h,
+		datasource.Timeframe1d,
+		datasource.Timeframe3d,
+		datasource.Timeframe1w,
+		datasource.Timeframe1M,
 	}
 
-	return cfg, nil
+	for _, valid := range validTimeframes {
+		if tf == valid {
+			return true
+		}
+	}
+	return false
 }

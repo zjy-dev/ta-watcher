@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"ta-watcher/internal/datasource"
 	"ta-watcher/internal/indicators"
 )
 
@@ -13,7 +14,7 @@ type MACrossStrategy struct {
 	fastPeriod          int
 	slowPeriod          int
 	maType              indicators.MovingAverageType
-	supportedTimeframes []Timeframe
+	supportedTimeframes []datasource.Timeframe
 }
 
 // NewMACrossStrategy 创建移动平均线交叉策略
@@ -46,10 +47,10 @@ func NewMACrossStrategy(fastPeriod, slowPeriod int, maType indicators.MovingAver
 		fastPeriod: fastPeriod,
 		slowPeriod: slowPeriod,
 		maType:     maType,
-		supportedTimeframes: []Timeframe{
-			Timeframe5m, Timeframe15m, Timeframe30m,
-			Timeframe1h, Timeframe2h, Timeframe4h, Timeframe6h, Timeframe12h,
-			Timeframe1d, Timeframe3d, Timeframe1w, Timeframe1M,
+		supportedTimeframes: []datasource.Timeframe{
+			datasource.Timeframe5m, datasource.Timeframe15m, datasource.Timeframe30m,
+			datasource.Timeframe1h, datasource.Timeframe2h, datasource.Timeframe4h, datasource.Timeframe6h, datasource.Timeframe12h,
+			datasource.Timeframe1d, datasource.Timeframe3d, datasource.Timeframe1w, datasource.Timeframe1M,
 		},
 	}
 }
@@ -80,7 +81,7 @@ func (s *MACrossStrategy) RequiredDataPoints() int {
 }
 
 // SupportedTimeframes 返回支持的时间框架
-func (s *MACrossStrategy) SupportedTimeframes() []Timeframe {
+func (s *MACrossStrategy) SupportedTimeframes() []datasource.Timeframe {
 	return s.supportedTimeframes
 }
 

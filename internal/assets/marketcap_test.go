@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"ta-watcher/internal/binance"
+	"ta-watcher/internal/datasource"
 )
 
 func TestMockMarketCapProvider(t *testing.T) {
@@ -177,49 +177,27 @@ func TestValidatorWithMarketCap(t *testing.T) {
 	t.Skip("复杂的验证器集成测试在 integration_test.go 中覆盖")
 }
 
-// MockBinanceClient 模拟的币安客户端（完整实现接口）
-type MockBinanceClient struct {
+// MockDataSourceForMarketCap 用于市值管理器测试的简化 mock
+type MockDataSourceForMarketCap struct {
 	validSymbols map[string]bool
 }
 
-func (m *MockBinanceClient) GetPrice(ctx context.Context, symbol string) (*binance.PriceData, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *MockBinanceClient) GetPrices(ctx context.Context, symbols []string) ([]*binance.PriceData, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *MockBinanceClient) GetKlines(ctx context.Context, symbol, interval string, limit int) ([]*binance.KlineData, error) {
+func (m *MockDataSourceForMarketCap) GetKlines(ctx context.Context, symbol string, interval datasource.Timeframe, startTime, endTime time.Time, limit int) ([]*datasource.Kline, error) {
 	if m.validSymbols[symbol] {
-		return []*binance.KlineData{{
+		return []*datasource.Kline{{
 			Symbol:   symbol,
-			Interval: interval,
+			OpenTime: time.Now(),
+			Open:     1.0,
+			Close:    1.0,
 		}}, nil
 	}
 	return nil, fmt.Errorf("symbol %s not found", symbol)
 }
 
-func (m *MockBinanceClient) GetKlinesWithTimeRange(ctx context.Context, symbol, interval string, startTime, endTime time.Time) ([]*binance.KlineData, error) {
-	return nil, fmt.Errorf("not implemented")
+func (m *MockDataSourceForMarketCap) IsSymbolValid(ctx context.Context, symbol string) (bool, error) {
+	return m.validSymbols[symbol], nil
 }
 
-func (m *MockBinanceClient) GetTicker24hr(ctx context.Context, symbol string) (*binance.TickerData, error) {
-	return nil, fmt.Errorf("not implemented")
-}
-
-func (m *MockBinanceClient) GetAllTickers24hr(ctx context.Context) ([]*binance.TickerData, error) {
-	return []*binance.TickerData{}, nil
-}
-
-func (m *MockBinanceClient) GetExchangeInfo(ctx context.Context) (*binance.ExchangeInfo, error) {
-	return &binance.ExchangeInfo{}, nil
-}
-
-func (m *MockBinanceClient) Ping(ctx context.Context) error {
-	return nil
-}
-
-func (m *MockBinanceClient) GetServerTime(ctx context.Context) (time.Time, error) {
-	return time.Now(), nil
+func (m *MockDataSourceForMarketCap) Name() string {
+	return "mock"
 }

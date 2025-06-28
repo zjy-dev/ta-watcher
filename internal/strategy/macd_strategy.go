@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"fmt"
+	"ta-watcher/internal/datasource"
 	"time"
 )
 
@@ -11,7 +12,7 @@ type MACDStrategy struct {
 	fastPeriod          int
 	slowPeriod          int
 	signalPeriod        int
-	supportedTimeframes []Timeframe
+	supportedTimeframes []datasource.Timeframe
 }
 
 // NewMACDStrategy 创建MACD策略
@@ -36,10 +37,10 @@ func NewMACDStrategy(fastPeriod, slowPeriod, signalPeriod int) *MACDStrategy {
 		fastPeriod:   fastPeriod,
 		slowPeriod:   slowPeriod,
 		signalPeriod: signalPeriod,
-		supportedTimeframes: []Timeframe{
-			Timeframe15m, Timeframe30m, Timeframe1h, Timeframe2h,
-			Timeframe4h, Timeframe6h, Timeframe12h,
-			Timeframe1d, Timeframe3d, Timeframe1w, Timeframe1M,
+		supportedTimeframes: []datasource.Timeframe{
+			datasource.Timeframe15m, datasource.Timeframe30m, datasource.Timeframe1h, datasource.Timeframe2h,
+			datasource.Timeframe4h, datasource.Timeframe6h, datasource.Timeframe12h,
+			datasource.Timeframe1d, datasource.Timeframe3d, datasource.Timeframe1w, datasource.Timeframe1M,
 		},
 	}
 }
@@ -61,7 +62,7 @@ func (s *MACDStrategy) RequiredDataPoints() int {
 }
 
 // SupportedTimeframes 返回支持的时间框架
-func (s *MACDStrategy) SupportedTimeframes() []Timeframe {
+func (s *MACDStrategy) SupportedTimeframes() []datasource.Timeframe {
 	return s.supportedTimeframes
 }
 

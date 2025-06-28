@@ -8,19 +8,19 @@ import (
 	"strings"
 	"time"
 
-	"ta-watcher/internal/binance"
 	"ta-watcher/internal/config"
+	"ta-watcher/internal/datasource"
 )
 
 // Validator 资产验证器
 type Validator struct {
-	client           binance.DataSource
+	client           datasource.DataSource
 	config           *config.AssetsConfig
 	marketCapManager *MarketCapManager
 }
 
 // NewValidator 创建新的资产验证器
-func NewValidator(client binance.DataSource, config *config.AssetsConfig) *Validator {
+func NewValidator(client datasource.DataSource, config *config.AssetsConfig) *Validator {
 	// 创建市值管理器（使用模拟数据，生产环境可替换为真实API）
 	marketCapProvider := NewMockMarketCapProvider()
 	marketCapManager := NewMarketCapManager(marketCapProvider, config.MarketCapUpdateInterval)
@@ -91,9 +91,15 @@ func (v *Validator) ValidateAssets(ctx context.Context) (*ValidationResult, erro
 
 // validateSymbolPair 验证单个交易对是否存在
 func (v *Validator) validateSymbolPair(ctx context.Context, symbol string) error {
-	// 尝试获取少量K线数据来验证交易对是否存在
-	_, err := v.client.GetKlines(ctx, symbol, "1d", 1)
-	return err
+	// 使用 IsSymbolValid 方法来验证交易对是否存在
+	valid, err := v.client.IsSymbolValid(ctx, symbol)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("symbol %s is not valid", symbol)
+	}
+	return nil
 }
 
 // calculateRatePairs 计算需要的汇率交易对

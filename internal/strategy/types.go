@@ -4,7 +4,7 @@ package strategy
 import (
 	"time"
 
-	"ta-watcher/internal/binance"
+	"ta-watcher/internal/datasource"
 	"ta-watcher/internal/indicators"
 )
 
@@ -53,33 +53,12 @@ func (s Strength) String() string {
 	}
 }
 
-// Timeframe 时间框架
-type Timeframe string
-
-const (
-	Timeframe1m  Timeframe = "1m"
-	Timeframe3m  Timeframe = "3m"
-	Timeframe5m  Timeframe = "5m"
-	Timeframe15m Timeframe = "15m"
-	Timeframe30m Timeframe = "30m"
-	Timeframe1h  Timeframe = "1h"
-	Timeframe2h  Timeframe = "2h"
-	Timeframe4h  Timeframe = "4h"
-	Timeframe6h  Timeframe = "6h"
-	Timeframe8h  Timeframe = "8h"
-	Timeframe12h Timeframe = "12h"
-	Timeframe1d  Timeframe = "1d"
-	Timeframe3d  Timeframe = "3d"
-	Timeframe1w  Timeframe = "1w"
-	Timeframe1M  Timeframe = "1M"
-)
-
 // MarketData 市场数据
 type MarketData struct {
-	Symbol    string              // 交易对
-	Timeframe Timeframe           // 时间框架
-	Klines    []binance.KlineData // K线数据
-	Timestamp time.Time           // 数据时间戳
+	Symbol    string               // 交易对
+	Timeframe datasource.Timeframe // 时间框架
+	Klines    []*datasource.Kline  // K线数据
+	Timestamp time.Time            // 数据时间戳
 }
 
 // StrategyResult 策略评估结果
@@ -131,7 +110,7 @@ type Strategy interface {
 	RequiredDataPoints() int
 
 	// SupportedTimeframes 返回支持的时间框架
-	SupportedTimeframes() []Timeframe
+	SupportedTimeframes() []datasource.Timeframe
 }
 
 // CompositeStrategy 复合策略接口 - 简化版本，专为通知系统设计

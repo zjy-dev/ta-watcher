@@ -3,7 +3,7 @@
 
 # 数据源配置（新增：支持多数据源切换）
 datasource:
-  primary: "coinbase"       # 主数据源: binance, coinbase
+  primary: "binance"       # 主数据源: binance, coinbase
   fallback: ""              # 备用数据源（留空，避免地理限制）
   timeout: 30s              # 请求超时时间
   max_retries: 3            # 最大重试次数
@@ -65,15 +65,15 @@ notifiers:
 # 监控资产配置
 assets:
   symbols:                          # 要监控的加密货币列表
-    - "BTC"                         # 比特币
-    - "ETH"                         # 以太坊
-    - "BNB"                         # 币安币
+    # - "BTC"                         # 比特币
+    # - "ETH"                         # 以太坊
+    # - "BNB"                         # 币安币
     - "ADA"                         # 卡尔达诺
     - "SOL"                         # Solana
   timeframes:                       # 监控的时间框架
-    - "1d"                          # 日线
-    - "1w"                          # 周线
-    - "1M"                          # 月线
+    - "1d"                          # 小时线（测试用）
+    - "1w"                          # 4小时线
+    - "1M"                          # 日线
   base_currency: "USDT"             # 基准货币
   market_cap_update_interval: 1h    # 市值数据更新间隔
 

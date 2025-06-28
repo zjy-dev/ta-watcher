@@ -3,6 +3,8 @@ package strategy
 import (
 	"fmt"
 	"time"
+
+	"ta-watcher/internal/datasource"
 )
 
 // MultiStrategy 多策略组合 - 专为通知系统设计
@@ -62,20 +64,20 @@ func (s *MultiStrategy) RequiredDataPoints() int {
 }
 
 // SupportedTimeframes 返回支持的时间框架（所有子策略的交集）
-func (s *MultiStrategy) SupportedTimeframes() []Timeframe {
+func (s *MultiStrategy) SupportedTimeframes() []datasource.Timeframe {
 	if len(s.subStrategies) == 0 {
-		return []Timeframe{}
+		return []datasource.Timeframe{}
 	}
 
 	// 取第一个策略的时间框架作为基准
-	var baseTimeframes []Timeframe
+	var baseTimeframes []datasource.Timeframe
 	for _, strategy := range s.subStrategies {
 		baseTimeframes = strategy.SupportedTimeframes()
 		break
 	}
 
 	// 求交集
-	supported := make([]Timeframe, 0)
+	supported := make([]datasource.Timeframe, 0)
 	for _, tf := range baseTimeframes {
 		allSupport := true
 		for _, strategy := range s.subStrategies {
@@ -200,7 +202,7 @@ func getCurrentPrice(data *MarketData) float64 {
 }
 
 // contains 检查切片是否包含元素
-func contains(slice []Timeframe, item Timeframe) bool {
+func contains(slice []datasource.Timeframe, item datasource.Timeframe) bool {
 	for _, s := range slice {
 		if s == item {
 			return true

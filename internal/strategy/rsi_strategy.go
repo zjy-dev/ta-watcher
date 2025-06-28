@@ -3,6 +3,8 @@ package strategy
 import (
 	"fmt"
 	"time"
+
+	"ta-watcher/internal/datasource"
 )
 
 // RSIStrategy RSI策略
@@ -11,7 +13,7 @@ type RSIStrategy struct {
 	period              int
 	overboughtLevel     float64
 	oversoldLevel       float64
-	supportedTimeframes []Timeframe
+	supportedTimeframes []datasource.Timeframe
 }
 
 // NewRSIStrategy 创建RSI策略
@@ -31,10 +33,11 @@ func NewRSIStrategy(period int, overboughtLevel, oversoldLevel float64) *RSIStra
 		period:          period,
 		overboughtLevel: overboughtLevel,
 		oversoldLevel:   oversoldLevel,
-		supportedTimeframes: []Timeframe{
-			Timeframe5m, Timeframe15m, Timeframe30m,
-			Timeframe1h, Timeframe2h, Timeframe4h, Timeframe6h, Timeframe12h,
-			Timeframe1d, Timeframe3d, Timeframe1w, Timeframe1M,
+		supportedTimeframes: []datasource.Timeframe{
+			datasource.Timeframe5m, datasource.Timeframe15m, datasource.Timeframe30m,
+			datasource.Timeframe1h, datasource.Timeframe2h, datasource.Timeframe4h,
+			datasource.Timeframe6h, datasource.Timeframe12h,
+			datasource.Timeframe1d, datasource.Timeframe3d, datasource.Timeframe1w, datasource.Timeframe1M,
 		},
 	}
 }
@@ -52,18 +55,14 @@ func (s *RSIStrategy) Description() string {
 
 // RequiredDataPoints 返回所需数据点
 func (s *RSIStrategy) RequiredDataPoints() int {
-	// RSI需要足够的数据来保证计算准确性
-	// 基本需求：period + 1
-	// 为了稳定性，我们要求至少30个数据点
-	baseRequirement := s.period + 1
-	if baseRequirement < 30 {
-		return 30
-	}
-	return baseRequirement + 15 // 额外缓冲
+	// RSI需要足够的历史数据来计算稳定的平均涨跌幅
+	// 通常需要 period * 5 个数据点来获得准确的RSI值
+	// 对于RSI-14，至少需要 14 * 5 = 70 个数据点
+	return s.period * 5
 }
 
 // SupportedTimeframes 返回支持的时间框架
-func (s *RSIStrategy) SupportedTimeframes() []Timeframe {
+func (s *RSIStrategy) SupportedTimeframes() []datasource.Timeframe {
 	return s.supportedTimeframes
 }
 

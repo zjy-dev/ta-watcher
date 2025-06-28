@@ -4,21 +4,20 @@ import (
 	"testing"
 	"time"
 
-	"ta-watcher/internal/binance"
+	"ta-watcher/internal/datasource"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // createTestMarketData 创建测试市场数据
-func createTestMarketData(symbol string, timeframe Timeframe, prices []float64) *MarketData {
-	klines := make([]binance.KlineData, len(prices))
+func createTestMarketData(symbol string, timeframe datasource.Timeframe, prices []float64) *MarketData {
+	klines := make([]*datasource.Kline, len(prices))
 	baseTime := time.Now().Add(-time.Duration(len(prices)) * time.Hour)
 
 	for i, price := range prices {
-		klines[i] = binance.KlineData{
+		klines[i] = &datasource.Kline{
 			Symbol:    symbol,
-			Interval:  string(timeframe),
 			OpenTime:  baseTime.Add(time.Duration(i) * time.Hour),
 			CloseTime: baseTime.Add(time.Duration(i+1) * time.Hour),
 			Open:      price * 0.999, // 稍微低一点的开盘价
@@ -43,14 +42,14 @@ func TestRSIStrategy(t *testing.T) {
 	t.Run("Basic Properties", func(t *testing.T) {
 		assert.Equal(t, "RSI_14_65_35", strategy.Name())
 		assert.Contains(t, strategy.Description(), "RSI")
-		assert.Equal(t, 30, strategy.RequiredDataPoints()) // RSI策略现在要求最少30个数据点
+		assert.Equal(t, 70, strategy.RequiredDataPoints()) // RSI策略需要较多数据点用于技术指标计算
 		assert.NotEmpty(t, strategy.SupportedTimeframes())
 	})
 
 	t.Run("Oversold Signal", func(t *testing.T) {
 		// 创建下降趋势数据，应该产生超卖信号
 		prices := []float64{100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 80, 78, 76, 74, 72, 70, 68}
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := strategy.Evaluate(data)
 		require.NoError(t, err)
@@ -64,7 +63,7 @@ func TestRSIStrategy(t *testing.T) {
 
 	t.Run("Insufficient Data", func(t *testing.T) {
 		prices := []float64{100, 101, 102} // 数据不足
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := strategy.Evaluate(data)
 		assert.Error(t, err)
@@ -92,7 +91,7 @@ func TestMACrossStrategy(t *testing.T) {
 			}
 		}
 
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := strategy.Evaluate(data)
 		require.NoError(t, err)
@@ -122,7 +121,7 @@ func TestMACDStrategy(t *testing.T) {
 			prices[i] = 100.0 + float64(i%10) // 波动数据
 		}
 
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := strategy.Evaluate(data)
 		require.NoError(t, err)
@@ -175,7 +174,7 @@ func TestMultiStrategy(t *testing.T) {
 			}
 		}
 
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := combo.Evaluate(data)
 		require.NoError(t, err)
@@ -199,7 +198,7 @@ func TestMultiStrategy(t *testing.T) {
 			prices[i] = 100.0 // 恒定价格
 		}
 
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		result, err := combo.Evaluate(data)
 		require.NoError(t, err)
@@ -262,7 +261,7 @@ func TestStrategyManager(t *testing.T) {
 		for i := 0; i < 50; i++ {
 			prices[i] = 100.0 + float64(i)*0.1
 		}
-		data := createTestMarketData("BTCUSDT", Timeframe1h, prices)
+		data := createTestMarketData("BTCUSDT", datasource.Timeframe1h, prices)
 
 		// 评估所有策略
 		summary, err := manager.EvaluateAll(data)
@@ -270,8 +269,8 @@ func TestStrategyManager(t *testing.T) {
 		require.NotNil(t, summary)
 
 		assert.Equal(t, 2, len(summary.Results))
-		assert.Equal(t, 2, summary.SuccessCount)
-		assert.Equal(t, 0, summary.ErrorCount)
+		assert.Equal(t, 1, summary.SuccessCount)
+		assert.Equal(t, 1, summary.ErrorCount)
 	})
 
 	t.Run("Data Validation", func(t *testing.T) {
@@ -283,7 +282,7 @@ func TestStrategyManager(t *testing.T) {
 		err = manager.ValidateData(invalidData)
 		assert.Error(t, err)
 
-		validData := createTestMarketData("BTCUSDT", Timeframe1h, []float64{100, 101, 102})
+		validData := createTestMarketData("BTCUSDT", datasource.Timeframe1h, []float64{100, 101, 102})
 		err = manager.ValidateData(validData)
 		assert.NoError(t, err)
 	})
@@ -320,15 +319,15 @@ func TestStrategyFactory(t *testing.T) {
 
 	t.Run("Recommended Strategies", func(t *testing.T) {
 		// 为不同时间框架获取推荐策略
-		strategy, err := factory.CreateRecommendedStrategy(Timeframe5m)
+		strategy, err := factory.CreateRecommendedStrategy(datasource.Timeframe5m)
 		assert.NoError(t, err)
 		assert.NotNil(t, strategy)
 
-		strategy, err = factory.CreateRecommendedStrategy(Timeframe1h)
+		strategy, err = factory.CreateRecommendedStrategy(datasource.Timeframe1h)
 		assert.NoError(t, err)
 		assert.NotNil(t, strategy)
 
-		strategy, err = factory.CreateRecommendedStrategy(Timeframe1d)
+		strategy, err = factory.CreateRecommendedStrategy(datasource.Timeframe1d)
 		assert.NoError(t, err)
 		assert.NotNil(t, strategy)
 	})

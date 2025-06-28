@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"ta-watcher/internal/binance"
-	"ta-watcher/internal/coinbase"
 	"ta-watcher/internal/config"
+	"ta-watcher/internal/datasource"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,42 +26,16 @@ func TestIntegration_AssetsValidationWorkflow(t *testing.T) {
 	require.NoError(t, err, "应该能够加载配置文件")
 
 	// 创建数据源客户端
-	var dataSource binance.DataSource
-	primarySource := cfg.DataSource.Primary
+	dataSource, err := datasource.NewDataSource(&cfg.DataSource)
+	require.NoError(t, err, "应该能够创建数据源客户端")
 
-	switch primarySource {
-	case "binance":
-		client, err := binance.NewClient(&cfg.Binance)
-		require.NoError(t, err, "应该能够创建 Binance 客户端")
-		dataSource = client
-
-	case "coinbase":
-		// 转换配置格式
-		coinbaseConfig := &coinbase.Config{
-			RateLimit: struct {
-				RequestsPerMinute int           `yaml:"requests_per_minute"`
-				RetryDelay        time.Duration `yaml:"retry_delay"`
-				MaxRetries        int           `yaml:"max_retries"`
-			}{
-				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
-				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
-				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
-			},
-		}
-		coinbaseClient := coinbase.NewClient(coinbaseConfig)
-		// 使用适配器将 Coinbase 客户端包装为 binance.DataSource 接口
-		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
-
-	default:
-		t.Fatalf("不支持的数据源: %s", primarySource)
-	}
-
-	t.Logf("使用数据源: %s", primarySource)
+	t.Logf("使用数据源: %s", dataSource.Name())
 
 	// 测试连接
 	ctx := context.Background()
-	err = dataSource.Ping(ctx)
-	require.NoError(t, err, "应该能够连接到数据源 API")
+	isValid, err := dataSource.IsSymbolValid(ctx, "BTCUSDT")
+	require.NoError(t, err, "应该能够检查符号有效性")
+	assert.True(t, isValid, "BTCUSDT 应该是有效的交易对")
 
 	// 验证资产
 	validator := NewValidator(dataSource, &cfg.Assets)
@@ -74,15 +47,8 @@ func TestIntegration_AssetsValidationWorkflow(t *testing.T) {
 	assert.NotEmpty(t, result.ValidSymbols, "应该有有效的币种")
 	assert.NotEmpty(t, result.ValidPairs, "应该有有效的交易对")
 
-	// 根据数据源调整期望的交易对
-	var expectedPairs []string
-	if primarySource == "coinbase" {
-		// Coinbase 适配器返回 Binance 风格的交易对格式
-		expectedPairs = []string{"BTCUSDT", "ETHUSDT"}
-	} else {
-		// Binance 格式
-		expectedPairs = []string{"BTCUSDT", "ETHUSDT", "BNBUSDT"}
-	}
+	// 验证期望的交易对
+	expectedPairs := []string{"BTCUSDT", "ETHUSDT"}
 	for _, pair := range expectedPairs {
 		assert.Contains(t, result.ValidPairs, pair, "应该包含 %s 交易对", pair)
 	}
@@ -127,34 +93,8 @@ func TestIntegration_ConfigValidation(t *testing.T) {
 	require.NoError(t, err, "应该能够加载配置文件")
 
 	// 创建数据源客户端
-	var dataSource binance.DataSource
-	primarySource := cfg.DataSource.Primary
-
-	switch primarySource {
-	case "binance":
-		client, err := binance.NewClient(&cfg.Binance)
-		require.NoError(t, err, "应该能够创建 Binance 客户端")
-		dataSource = client
-
-	case "coinbase":
-		// 转换配置格式
-		coinbaseConfig := &coinbase.Config{
-			RateLimit: struct {
-				RequestsPerMinute int           `yaml:"requests_per_minute"`
-				RetryDelay        time.Duration `yaml:"retry_delay"`
-				MaxRetries        int           `yaml:"max_retries"`
-			}{
-				RequestsPerMinute: cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute,
-				RetryDelay:        cfg.DataSource.Coinbase.RateLimit.RetryDelay,
-				MaxRetries:        cfg.DataSource.Coinbase.RateLimit.MaxRetries,
-			},
-		}
-		coinbaseClient := coinbase.NewClient(coinbaseConfig)
-		dataSource = coinbase.NewBinanceAdapter(coinbaseClient)
-
-	default:
-		t.Fatalf("不支持的数据源: %s", primarySource)
-	}
+	dataSource, err := datasource.NewDataSource(&cfg.DataSource)
+	require.NoError(t, err, "应该能够创建数据源客户端")
 
 	// 测试各种配置场景
 	testCases := []struct {

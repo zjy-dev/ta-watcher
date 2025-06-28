@@ -5,17 +5,22 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"time"
 
-	"ta-watcher/internal/binance"
+	"ta-watcher/internal/datasource"
 )
+
+// 汇率计算的最小数据点数
+// 汇率计算需要更多数据点来确保准确性和稳定性
+const MinRateCalculationDataPoints = 30
 
 // RateCalculator 汇率计算器
 type RateCalculator struct {
-	client binance.DataSource
+	client datasource.DataSource
 }
 
 // NewRateCalculator 创建新的汇率计算器
-func NewRateCalculator(client binance.DataSource) *RateCalculator {
+func NewRateCalculator(client datasource.DataSource) *RateCalculator {
 	return &RateCalculator{
 		client: client,
 	}
@@ -24,26 +29,28 @@ func NewRateCalculator(client binance.DataSource) *RateCalculator {
 // CalculateRate 计算两个币种之间的汇率
 // 例如：CalculateRate("ETH", "BTC", "USDT") 计算 ETH/BTC 的汇率
 // 意思是：1 ETH = ? BTC（用BTC报价ETH）
-func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSymbol, bridgeCurrency string, interval string, limit int) ([]*binance.KlineData, error) {
+func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSymbol, bridgeCurrency string, interval datasource.Timeframe, limit int) ([]*datasource.Kline, error) {
 	log.Printf("计算 %s/%s 汇率，通过 %s 桥接", baseSymbol, quoteSymbol, bridgeCurrency)
 
 	// 为了确保技术指标计算的准确性，我们需要更多的数据
-	// 对于RSI-14，我们至少需要15个数据点，但为了计算稳定，我们获取更多
+	// 汇率计算需要足够的数据点来确保稳定性
 	requestLimit := limit
-	if requestLimit < 200 {
-		requestLimit = 200 // 确保获取足够的数据
+	if requestLimit < MinRateCalculationDataPoints {
+		requestLimit = MinRateCalculationDataPoints
 	}
+
+	log.Printf("计算 %s/%s 汇率，通过 %s 桥接，需要 %d 个数据点", baseSymbol, quoteSymbol, bridgeCurrency, requestLimit)
 
 	// 获取基础币种对桥接货币的价格 (如 ETH/USDT)
 	basePair := baseSymbol + bridgeCurrency
-	baseKlines, err := rc.client.GetKlines(ctx, basePair, interval, requestLimit)
+	baseKlines, err := rc.client.GetKlines(ctx, basePair, interval, time.Time{}, time.Time{}, requestLimit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s klines: %w", basePair, err)
 	}
 
 	// 获取报价币种对桥接货币的价格 (如 BTC/USDT)
 	quotePair := quoteSymbol + bridgeCurrency
-	quoteKlines, err := rc.client.GetKlines(ctx, quotePair, interval, requestLimit)
+	quoteKlines, err := rc.client.GetKlines(ctx, quotePair, interval, time.Time{}, time.Time{}, requestLimit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s klines: %w", quotePair, err)
 	}
@@ -60,9 +67,9 @@ func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSy
 	}
 
 	// 检查是否有足够的数据来计算技术指标
-	// 对于RSI-14，我们至少需要15个数据点，但为了稳定性，建议30+
-	if minLength < 30 {
-		return nil, fmt.Errorf("insufficient kline data for rate calculation: need at least 30 data points, got %d", minLength)
+	// 汇率计算需要足够的数据点来保证准确性
+	if minLength < MinRateCalculationDataPoints {
+		return nil, fmt.Errorf("insufficient kline data for rate calculation: need at least %d data points, got %d", MinRateCalculationDataPoints, minLength)
 	}
 
 	// 按时间戳对齐数据
@@ -86,10 +93,10 @@ func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSy
 }
 
 // alignKlinesByTime 按时间戳对齐两个K线数据集并计算汇率
-func (rc *RateCalculator) alignKlinesByTime(baseKlines, quoteKlines []*binance.KlineData, baseSymbol, quoteSymbol string) ([]*binance.KlineData, error) {
+func (rc *RateCalculator) alignKlinesByTime(baseKlines, quoteKlines []*datasource.Kline, baseSymbol, quoteSymbol string) ([]*datasource.Kline, error) {
 	// 创建时间戳到K线的映射
-	baseMap := make(map[int64]*binance.KlineData)
-	quoteMap := make(map[int64]*binance.KlineData)
+	baseMap := make(map[int64]*datasource.Kline)
+	quoteMap := make(map[int64]*datasource.Kline)
 
 	for _, kline := range baseKlines {
 		timestamp := kline.OpenTime.Unix()
@@ -109,6 +116,8 @@ func (rc *RateCalculator) alignKlinesByTime(baseKlines, quoteKlines []*binance.K
 		}
 	}
 
+	log.Printf("时间戳对齐：共同时间戳%d个", len(commonTimestamps))
+
 	if len(commonTimestamps) == 0 {
 		return nil, fmt.Errorf("no matching timestamps found between %s and %s", baseSymbol, quoteSymbol)
 	}
@@ -123,37 +132,89 @@ func (rc *RateCalculator) alignKlinesByTime(baseKlines, quoteKlines []*binance.K
 	}
 
 	// 计算汇率K线数据
-	rateKlines := make([]*binance.KlineData, 0, len(commonTimestamps))
+	rateKlines := make([]*datasource.Kline, 0, len(commonTimestamps))
 
 	for _, timestamp := range commonTimestamps {
 		baseK := baseMap[timestamp]
 		quoteK := quoteMap[timestamp]
 
 		// 计算汇率: base/quote = (base/bridge) / (quote/bridge)
-		rateKline := &binance.KlineData{
+		// 对于OHLC，我们需要正确计算汇率的高低点
+		open := safeDiv(baseK.Open, quoteK.Open)
+		close := safeDiv(baseK.Close, quoteK.Close)
+
+		// 计算所有可能的汇率点，找到真正的最高和最低
+		rates := []float64{
+			safeDiv(baseK.Open, quoteK.Open),
+			safeDiv(baseK.Open, quoteK.Close),
+			safeDiv(baseK.High, quoteK.Low), // base最高/quote最低 = 汇率最高
+			safeDiv(baseK.Low, quoteK.High), // base最低/quote最高 = 汇率最低
+			safeDiv(baseK.Close, quoteK.Open),
+			safeDiv(baseK.Close, quoteK.Close),
+		}
+
+		// 过滤有效汇率值
+		validRates := make([]float64, 0)
+		for _, rate := range rates {
+			if rate > 0 && !math.IsNaN(rate) && !math.IsInf(rate, 0) {
+				validRates = append(validRates, rate)
+			}
+		}
+
+		if len(validRates) < 2 {
+			continue // 跳过无效数据
+		}
+
+		// 计算真实的最高和最低汇率
+		high := validRates[0]
+		low := validRates[0]
+		for _, rate := range validRates {
+			if rate > high {
+				high = rate
+			}
+			if rate < low {
+				low = rate
+			}
+		}
+
+		rateKline := &datasource.Kline{
 			Symbol:    baseSymbol + quoteSymbol,
-			Interval:  baseK.Interval,
 			OpenTime:  baseK.OpenTime,
 			CloseTime: baseK.CloseTime,
-			Open:      safeDiv(baseK.Open, quoteK.Open),
-			High:      safeDiv(baseK.High, quoteK.High), // 修正：base最高/quote最高
-			Low:       safeDiv(baseK.Low, quoteK.Low),   // 修正：base最低/quote最低
-			Close:     safeDiv(baseK.Close, quoteK.Close),
+			Open:      open,
+			High:      high,
+			Low:       low,
+			Close:     close,
 			Volume:    0, // 计算的汇率对没有实际交易量
 		}
 
-		// 验证数据有效性
-		if rateKline.Open > 0 && rateKline.Close > 0 && rateKline.High > 0 && rateKline.Low > 0 {
-			// 确保High >= Low，Open和Close在合理范围内
-			if rateKline.High >= rateKline.Low {
-				rateKlines = append(rateKlines, rateKline)
-			}
+		// 验证数据有效性：确保Open、Close、High、Low都为正数且High>=Low
+		if rateKline.Open <= 0 || rateKline.Close <= 0 || rateKline.High <= 0 || rateKline.Low <= 0 {
+			log.Printf("跳过数据点 %s - 价格非正数: Open=%.8f, High=%.8f, Low=%.8f, Close=%.8f",
+				rateKline.OpenTime.Format("2006-01-02 15:04:05"),
+				rateKline.Open, rateKline.High, rateKline.Low, rateKline.Close)
+			continue
 		}
+
+		// 确保High >= Low，这是K线数据的基本要求
+		if rateKline.High < rateKline.Low {
+			log.Printf("跳过数据点 %s - High < Low: High=%.8f, Low=%.8f",
+				rateKline.OpenTime.Format("2006-01-02 15:04:05"),
+				rateKline.High, rateKline.Low)
+			continue
+		}
+
+		// 进一步检查汇率是否在合理范围内（避免极端异常值）
+		if rateKline.High/rateKline.Low > 10.0 { // 单根K线内汇率波动不应超过10倍
+			continue
+		}
+
+		rateKlines = append(rateKlines, rateKline)
 	}
 
 	skippedCount := len(commonTimestamps) - len(rateKlines)
 	if skippedCount > 0 {
-		log.Printf("计算 %s/%s 汇率时跳过 %d 个无效数据点", baseSymbol, quoteSymbol, skippedCount)
+		log.Printf("计算 %s/%s 汇率时过滤了 %d 个异常数据点", baseSymbol, quoteSymbol, skippedCount)
 	}
 
 	return rateKlines, nil
@@ -179,7 +240,7 @@ func (rc *RateCalculator) GetAvailableRatePairs(ctx context.Context, symbols []s
 
 	for _, symbol := range symbols {
 		pair := symbol + bridgeCurrency
-		_, err := rc.client.GetKlines(ctx, pair, "1d", 1)
+		_, err := rc.client.GetKlines(ctx, pair, datasource.Timeframe1d, time.Time{}, time.Time{}, 1)
 		if err != nil {
 			log.Printf("币种 %s 对 %s 的交易对不存在: %v", symbol, bridgeCurrency, err)
 			unavailableSymbols = append(unavailableSymbols, symbol)

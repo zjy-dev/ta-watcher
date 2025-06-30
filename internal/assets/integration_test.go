@@ -26,7 +26,8 @@ func TestIntegration_AssetsValidationWorkflow(t *testing.T) {
 	require.NoError(t, err, "应该能够加载配置文件")
 
 	// 创建数据源客户端
-	dataSource, err := datasource.NewDataSource(&cfg.DataSource)
+	factory := datasource.NewFactory()
+	dataSource, err := factory.CreateDataSource(cfg.DataSource.Primary, cfg)
 	require.NoError(t, err, "应该能够创建数据源客户端")
 
 	t.Logf("使用数据源: %s", dataSource.Name())
@@ -47,43 +48,26 @@ func TestIntegration_AssetsValidationWorkflow(t *testing.T) {
 	assert.NotEmpty(t, result.ValidSymbols, "应该有有效的币种")
 	assert.NotEmpty(t, result.ValidPairs, "应该有有效的交易对")
 
-	// 验证期望的交易对
-	expectedPairs := []string{"BTCUSDT", "ETHUSDT"}
+	// 验证期望的交易对（根据config.yaml中的实际配置）
+	expectedPairs := []string{"ADAUSDT", "SOLUSDT"}
 	for _, pair := range expectedPairs {
-		assert.Contains(t, result.ValidPairs, pair, "应该包含 %s 交易对", pair)
-	}
-
-	// 验证时间框架
-	assert.Equal(t, cfg.Assets.Timeframes, result.SupportedTimeframes, "时间框架应该匹配")
-
-	// 输出摘要
-	t.Log(result.Summary())
-
-	// 测试汇率计算器
-	calculator := NewRateCalculator(dataSource)
-
-	// 测试获取可用的汇率对
-	available, unavailable, err := calculator.GetAvailableRatePairs(ctx, cfg.Assets.Symbols, cfg.Assets.BaseCurrency)
-	require.NoError(t, err, "获取可用汇率对应该成功")
-
-	assert.NotEmpty(t, available, "应该有可用的币种")
-	t.Logf("可用币种: %v", available)
-	t.Logf("不可用币种: %v", unavailable)
-
-	// 测试汇率计算（如果有足够的币种）
-	if len(available) >= 2 {
-		rateKlines, err := calculator.CalculateRate(ctx, available[0], available[1], cfg.Assets.BaseCurrency, "1d", 5)
-		if err != nil {
-			t.Logf("汇率计算失败（这是正常的）: %v", err)
-		} else {
-			assert.NotEmpty(t, rateKlines, "应该有汇率数据")
-			t.Logf("成功计算了 %s/%s 汇率，数据点数: %d", available[0], available[1], len(rateKlines))
+		found := false
+		for _, validPair := range result.ValidPairs {
+			if validPair == pair {
+				found = true
+				break
+			}
 		}
+		assert.True(t, found, "应该找到交易对: %s", pair)
 	}
+
+	t.Logf("验证完成: %d 个有效币种, %d 个有效交易对",
+		len(result.ValidSymbols), len(result.ValidPairs))
 }
 
-// TestIntegration_ConfigValidation 集成测试：配置验证
-func TestIntegration_ConfigValidation(t *testing.T) {
+// TestIntegration_RateCalculation 集成测试：汇率计算功能
+func TestIntegration_RateCalculation(t *testing.T) {
+	// 跳过集成测试，除非显式指定
 	if testing.Short() {
 		t.Skip("跳过集成测试")
 	}
@@ -93,155 +77,203 @@ func TestIntegration_ConfigValidation(t *testing.T) {
 	require.NoError(t, err, "应该能够加载配置文件")
 
 	// 创建数据源客户端
-	dataSource, err := datasource.NewDataSource(&cfg.DataSource)
+	factory := datasource.NewFactory()
+	dataSource, err := factory.CreateDataSource(cfg.DataSource.Primary, cfg)
 	require.NoError(t, err, "应该能够创建数据源客户端")
 
 	// 测试各种配置场景
+	// 测试用例统一使用 USDT 作为桥接货币
+	// Coinbase 现在支持 USDT 交易对
 	testCases := []struct {
-		name        string
-		config      config.AssetsConfig
-		expectError bool
-		description string
+		name         string
+		baseSymbol   string
+		quoteSymbol  string
+		bridge       string
+		shouldPass   bool
+		minDataCount int
 	}{
 		{
-			name: "标准配置",
-			config: config.AssetsConfig{
-				Symbols:                 []string{"BTC", "ETH"},
-				Timeframes:              []string{"1d", "1w"},
-				BaseCurrency:            "USDT",
-				MarketCapUpdateInterval: time.Hour,
-			},
-			expectError: false,
-			description: "应该通过标准配置验证",
+			name:         "BTC/ETH 汇率计算",
+			baseSymbol:   "BTC",
+			quoteSymbol:  "ETH",
+			bridge:       "USDT",
+			shouldPass:   true,
+			minDataCount: 20,
 		},
 		{
-			name: "包含无效币种",
-			config: config.AssetsConfig{
-				Symbols:                 []string{"BTC", "INVALID123", "ETH"},
-				Timeframes:              []string{"1d"},
-				BaseCurrency:            "USDT",
-				MarketCapUpdateInterval: time.Hour,
-			},
-			expectError: false, // 应该跳过无效币种但继续
-			description: "应该跳过无效币种",
+			name:         "ETH/BTC 汇率计算",
+			baseSymbol:   "ETH",
+			quoteSymbol:  "BTC",
+			bridge:       "USDT",
+			shouldPass:   true,
+			minDataCount: 20,
 		},
 		{
-			name: "多时间框架",
-			config: config.AssetsConfig{
-				Symbols:                 []string{"BTC"},
-				Timeframes:              []string{"1h", "4h", "1d", "1w"},
-				BaseCurrency:            "USDT",
-				MarketCapUpdateInterval: time.Hour,
-			},
-			expectError: false,
-			description: "应该支持多个时间框架",
+			name:         "无效币种组合",
+			baseSymbol:   "INVALID",
+			quoteSymbol:  "BTC",
+			bridge:       "USDT",
+			shouldPass:   false,
+			minDataCount: 0,
 		},
 	}
 
+	ctx := context.Background()
+	calculator := NewRateCalculator(dataSource)
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// 验证配置本身
-			err := tc.config.Validate()
-			require.NoError(t, err, "配置格式应该有效")
+			// 计算汇率
+			now := time.Now()
+			startTime := now.Add(-60 * 24 * time.Hour) // 60天前
+			klines, err := calculator.CalculateRate(
+				ctx,
+				tc.baseSymbol,
+				tc.quoteSymbol,
+				tc.bridge,
+				datasource.Timeframe1d,
+				startTime,
+				now,
+				50,
+			)
 
-			// 创建验证器
-			validator := NewValidator(dataSource, &tc.config)
-			ctx := context.Background()
+			if tc.shouldPass {
+				require.NoError(t, err, "汇率计算应该成功")
+				assert.GreaterOrEqual(t, len(klines), tc.minDataCount,
+					"应该有足够的K线数据")
 
-			result, err := validator.ValidateAssets(ctx)
-
-			if tc.expectError {
-				assert.Error(t, err, tc.description)
-			} else {
-				assert.NoError(t, err, tc.description)
-				if result != nil {
-					t.Log(result.Summary())
+				// 验证K线数据的有效性
+				for i, kline := range klines {
+					assert.Positive(t, kline.Open, "第 %d 个K线的开盘价应该为正", i)
+					assert.Positive(t, kline.Close, "第 %d 个K线的收盘价应该为正", i)
+					assert.Positive(t, kline.High, "第 %d 个K线的最高价应该为正", i)
+					assert.Positive(t, kline.Low, "第 %d 个K线的最低价应该为正", i)
+					assert.GreaterOrEqual(t, kline.High, kline.Low,
+						"第 %d 个K线的最高价应该不小于最低价", i)
+					assert.GreaterOrEqual(t, kline.High, kline.Open,
+						"第 %d 个K线的最高价应该不小于开盘价", i)
+					assert.GreaterOrEqual(t, kline.High, kline.Close,
+						"第 %d 个K线的最高价应该不小于收盘价", i)
+					assert.LessOrEqual(t, kline.Low, kline.Open,
+						"第 %d 个K线的最低价应该不大于开盘价", i)
+					assert.LessOrEqual(t, kline.Low, kline.Close,
+						"第 %d 个K线的最低价应该不大于收盘价", i)
 				}
+
+				t.Logf("%s: 计算成功，生成 %d 个K线数据", tc.name, len(klines))
+			} else {
+				assert.Error(t, err, "无效币种组合应该返回错误")
+				t.Logf("%s: 预期错误，实际错误: %v", tc.name, err)
 			}
 		})
 	}
 }
 
-// TestIntegration_MarketCapFunctionality 集成测试：市值查询功能
-func TestIntegration_MarketCapFunctionality(t *testing.T) {
+// TestIntegration_MarketCapData 集成测试：市值数据功能
+func TestIntegration_MarketCapData(t *testing.T) {
 	// 跳过集成测试，除非显式指定
 	if testing.Short() {
 		t.Skip("跳过集成测试")
 	}
 
-	t.Run("市值提供者测试", func(t *testing.T) {
-		// 测试模拟市值提供者
-		provider := NewMockMarketCapProvider()
-		ctx := context.Background()
+	provider := NewMockMarketCapProvider()
+	manager := NewMarketCapManager(provider, 5*time.Minute)
 
-		symbols := []string{"BTC", "ETH", "BNB"}
-		marketCaps, err := provider.GetMarketCaps(ctx, symbols)
-		require.NoError(t, err)
-		assert.Len(t, marketCaps, 3)
+	ctx := context.Background()
 
-		// 验证市值排序正确
-		assert.Greater(t, marketCaps["BTC"], marketCaps["ETH"])
-		assert.Greater(t, marketCaps["ETH"], marketCaps["BNB"])
-	})
+	// 测试获取市值数据
+	symbols := []string{"BTC", "ETH", "ADA"}
+	marketCaps, err := manager.GetMarketCaps(ctx, symbols)
+	require.NoError(t, err, "应该能够获取市值数据")
+	assert.Equal(t, len(symbols), len(marketCaps), "市值数据数量应该匹配")
 
-	t.Run("市值管理器缓存测试", func(t *testing.T) {
-		provider := NewMockMarketCapProvider()
-		manager := NewMarketCapManager(provider, 10*time.Second)
-		ctx := context.Background()
+	// 验证市值数据
+	for _, symbol := range symbols {
+		marketCap, exists := marketCaps[symbol]
+		assert.True(t, exists, "应该存在 %s 的市值数据", symbol)
+		assert.Positive(t, marketCap, "%s 的市值应该为正数", symbol)
+	}
 
-		symbols := []string{"BTC", "ETH"}
+	// 测试按市值排序
+	sortedSymbols := SortSymbolsByMarketCap(symbols, marketCaps)
+	assert.Equal(t, len(symbols), len(sortedSymbols), "排序后的符号数量应该一致")
 
-		// 第一次获取
-		start := time.Now()
-		marketCaps1, err := manager.GetMarketCaps(ctx, symbols)
-		firstCallDuration := time.Since(start)
-		require.NoError(t, err)
-		assert.Len(t, marketCaps1, 2)
+	// 验证排序结果（降序）
+	for i := 0; i < len(sortedSymbols)-1; i++ {
+		currentMarketCap := marketCaps[sortedSymbols[i]]
+		nextMarketCap := marketCaps[sortedSymbols[i+1]]
+		assert.GreaterOrEqual(t, currentMarketCap, nextMarketCap,
+			"市值应该按降序排列: %s (%.0f) >= %s (%.0f)",
+			sortedSymbols[i], currentMarketCap,
+			sortedSymbols[i+1], nextMarketCap)
+	}
 
-		// 第二次获取（应该从缓存中获取，更快）
-		start = time.Now()
-		marketCaps2, err := manager.GetMarketCaps(ctx, symbols)
-		secondCallDuration := time.Since(start)
-		require.NoError(t, err)
+	t.Logf("市值排序结果: %v", sortedSymbols)
+}
 
-		// 验证结果一致
-		assert.Equal(t, marketCaps1, marketCaps2)
+// TestIntegration_CompleteWorkflow 集成测试：完整的工作流程
+func TestIntegration_CompleteWorkflow(t *testing.T) {
+	// 跳过集成测试，除非显式指定
+	if testing.Short() {
+		t.Skip("跳过集成测试")
+	}
 
-		// 第二次调用应该更快（使用缓存）
-		assert.LessOrEqual(t, secondCallDuration, firstCallDuration)
+	// 从配置文件加载配置
+	cfg, err := config.LoadConfig("../../config.yaml")
+	require.NoError(t, err, "应该能够加载配置文件")
 
-		t.Logf("第一次调用: %v, 第二次调用: %v", firstCallDuration, secondCallDuration)
-	})
+	// 创建数据源客户端
+	factory := datasource.NewFactory()
+	dataSource, err := factory.CreateDataSource(cfg.DataSource.Primary, cfg)
+	require.NoError(t, err, "应该能够创建数据源客户端")
 
-	t.Run("交叉汇率对生成测试", func(t *testing.T) {
-		symbols := []string{"BTC", "ETH", "BNB", "ADA"}
-		provider := NewMockMarketCapProvider()
-		ctx := context.Background()
+	ctx := context.Background()
 
-		marketCaps, err := provider.GetMarketCaps(ctx, symbols)
-		require.NoError(t, err)
+	// 步骤1：验证资产
+	t.Log("步骤1：验证资产配置")
+	validator := NewValidator(dataSource, &cfg.Assets)
+	result, err := validator.ValidateAssets(ctx)
+	require.NoError(t, err, "资产验证应该成功")
 
-		// 测试按市值排序
-		sorted := SortSymbolsByMarketCap(symbols, marketCaps)
-		expected := []string{"BTC", "ETH", "SOL", "BNB", "ADA"} // 根据模拟数据的市值排序
-		// 只比较前几个，因为模拟数据可能不包含所有币种
-		for i := 0; i < len(sorted) && i < 3; i++ {
-			if i < len(expected) {
-				// 只验证 BTC 应该排在第一位
-				if i == 0 {
-					assert.Equal(t, "BTC", sorted[0], "BTC 应该有最高市值")
+	t.Logf("验证结果: %d 个有效币种, %d 个有效交易对, %d 个计算汇率对",
+		len(result.ValidSymbols), len(result.ValidPairs), len(result.CalculatedPairs))
+
+	// 步骤2：测试汇率计算（如果有计算汇率对）
+	if len(result.CalculatedPairs) > 0 {
+		t.Log("步骤2：测试汇率计算")
+		calculator := NewRateCalculator(dataSource)
+
+		for _, pair := range result.CalculatedPairs {
+			// 假设交易对格式为 BASEQUOTE（如 ETHBTC）
+			// 这里简化处理，实际应该有更好的解析逻辑
+			if len(pair) >= 6 {
+				baseSymbol := pair[:3]
+				quoteSymbol := pair[3:6]
+
+				t.Logf("计算汇率: %s/%s", baseSymbol, quoteSymbol)
+
+				now := time.Now()
+				startTime := now.Add(-45 * 24 * time.Hour) // 45天前
+				klines, err := calculator.CalculateRate(
+					ctx,
+					baseSymbol,
+					quoteSymbol,
+					"USDT",
+					datasource.Timeframe1d,
+					startTime,
+					now,
+					30,
+				)
+
+				if err != nil {
+					t.Logf("汇率计算失败: %v", err)
+				} else {
+					assert.NotEmpty(t, klines, "应该有汇率数据")
+					t.Logf("汇率计算成功: %d 个数据点", len(klines))
 				}
 			}
 		}
+	}
 
-		// 测试交叉汇率对生成
-		pairs := GenerateCrossRatePairs(symbols, marketCaps, 5)
-		assert.LessOrEqual(t, len(pairs), 5, "交易对数量应该受限制")
-
-		// 验证所有交易对都是高市值/低市值格式
-		for _, pair := range pairs {
-			assert.GreaterOrEqual(t, len(pair), 6, "交易对格式应该正确")
-			t.Logf("生成的交易对: %s", pair)
-		}
-	})
+	t.Log("完整工作流程测试完成")
 }

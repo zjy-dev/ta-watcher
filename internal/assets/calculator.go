@@ -10,10 +10,6 @@ import (
 	"ta-watcher/internal/datasource"
 )
 
-// 汇率计算的最小数据点数
-// 汇率计算需要更多数据点来确保准确性和稳定性
-const MinRateCalculationDataPoints = 30
-
 // RateCalculator 汇率计算器
 type RateCalculator struct {
 	client datasource.DataSource
@@ -29,63 +25,32 @@ func NewRateCalculator(client datasource.DataSource) *RateCalculator {
 // CalculateRate 计算两个币种之间的汇率
 // 例如：CalculateRate("ETH", "BTC", "USDT") 计算 ETH/BTC 的汇率
 // 意思是：1 ETH = ? BTC（用BTC报价ETH）
-func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSymbol, bridgeCurrency string, interval datasource.Timeframe, limit int) ([]*datasource.Kline, error) {
-	log.Printf("计算 %s/%s 汇率，通过 %s 桥接", baseSymbol, quoteSymbol, bridgeCurrency)
-
-	// 为了确保技术指标计算的准确性，我们需要更多的数据
-	// 汇率计算需要足够的数据点来确保稳定性
-	requestLimit := limit
-	if requestLimit < MinRateCalculationDataPoints {
-		requestLimit = MinRateCalculationDataPoints
-	}
-
-	log.Printf("计算 %s/%s 汇率，通过 %s 桥接，需要 %d 个数据点", baseSymbol, quoteSymbol, bridgeCurrency, requestLimit)
+func (rc *RateCalculator) CalculateRate(ctx context.Context, baseSymbol, quoteSymbol, bridgeCurrency string, interval datasource.Timeframe, startTime, endTime time.Time, limit int) ([]*datasource.Kline, error) {
+	log.Printf("计算 %s/%s 汇率，通过 %s 桥接 (%s)", baseSymbol, quoteSymbol, bridgeCurrency, interval)
 
 	// 获取基础币种对桥接货币的价格 (如 ETH/USDT)
 	basePair := baseSymbol + bridgeCurrency
-	baseKlines, err := rc.client.GetKlines(ctx, basePair, interval, time.Time{}, time.Time{}, requestLimit)
+	baseKlines, err := rc.client.GetKlines(ctx, basePair, interval, startTime, endTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s klines: %w", basePair, err)
 	}
 
 	// 获取报价币种对桥接货币的价格 (如 BTC/USDT)
 	quotePair := quoteSymbol + bridgeCurrency
-	quoteKlines, err := rc.client.GetKlines(ctx, quotePair, interval, time.Time{}, time.Time{}, requestLimit)
+	quoteKlines, err := rc.client.GetKlines(ctx, quotePair, interval, startTime, endTime, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get %s klines: %w", quotePair, err)
 	}
 
-	// 检查数据是否足够
+	// 检查数据是否可用
 	if len(baseKlines) == 0 || len(quoteKlines) == 0 {
 		return nil, fmt.Errorf("no kline data available for rate calculation")
 	}
 
-	// 取两个币种中数据较少的那个作为基准
-	minLength := len(baseKlines)
-	if len(quoteKlines) < minLength {
-		minLength = len(quoteKlines)
-	}
-
-	// 检查是否有足够的数据来计算技术指标
-	// 汇率计算需要足够的数据点来保证准确性
-	if minLength < MinRateCalculationDataPoints {
-		return nil, fmt.Errorf("insufficient kline data for rate calculation: need at least %d data points, got %d", MinRateCalculationDataPoints, minLength)
-	}
-
-	// 按时间戳对齐数据
+	// 按时间戳对齐数据并计算汇率
 	alignedData, err := rc.alignKlinesByTime(baseKlines, quoteKlines, baseSymbol, quoteSymbol)
 	if err != nil {
 		return nil, fmt.Errorf("failed to align klines by time: %w", err)
-	}
-
-	// 检查对齐后的数据是否足够
-	if len(alignedData) < 30 {
-		return nil, fmt.Errorf("insufficient aligned kline data: need at least 30 data points, got %d after alignment", len(alignedData))
-	}
-
-	// 限制返回的数据量
-	if len(alignedData) > limit {
-		alignedData = alignedData[len(alignedData)-limit:]
 	}
 
 	log.Printf("成功计算 %s/%s 汇率，生成 %d 个数据点", baseSymbol, quoteSymbol, len(alignedData))

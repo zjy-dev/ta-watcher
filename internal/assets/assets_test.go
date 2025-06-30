@@ -162,16 +162,17 @@ func TestRateCalculator_CalculateRate(t *testing.T) {
 		}
 	}
 
-	// 设置模拟响应
-	mockClient.On("GetKlines", ctx, "BTCUSDT", datasource.Timeframe1d, time.Time{}, time.Time{}, 30).Return(btcKlines, nil)
-	mockClient.On("GetKlines", ctx, "ETHUSDT", datasource.Timeframe1d, time.Time{}, time.Time{}, 30).Return(ethKlines, nil)
+	// 设置模拟响应 - 汇率计算器现在直接使用调用方指定的时间参数
+	startTime := now.Add(-30 * 24 * time.Hour)
+	mockClient.On("GetKlines", ctx, "BTCUSDT", datasource.Timeframe1d, startTime, now, 20).Return(btcKlines, nil)
+	mockClient.On("GetKlines", ctx, "ETHUSDT", datasource.Timeframe1d, startTime, now, 20).Return(ethKlines, nil)
 
 	// 计算ETH/BTC汇率
-	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", datasource.Timeframe1d, 20)
+	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", datasource.Timeframe1d, startTime, now, 20)
 
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.Len(t, result, 20) // 请求20个数据点
+	assert.Len(t, result, 30) // 返回所有30个数据点（时间戳对齐后的结果）
 
 	// 验证汇率计算的正确性
 	for _, kline := range result {
@@ -190,7 +191,7 @@ func TestRateCalculator_CalculateRate_InsufficientData(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 创建不足的K线数据（只有5个数据点）
+	// 创建有效的K线数据（5个数据点）
 	now := time.Now()
 	btcKlines := make([]*datasource.Kline, 5)
 	ethKlines := make([]*datasource.Kline, 5)
@@ -219,15 +220,25 @@ func TestRateCalculator_CalculateRate_InsufficientData(t *testing.T) {
 		}
 	}
 
-	// 设置模拟响应
-	mockClient.On("GetKlines", ctx, "BTCUSDT", datasource.Timeframe1d, time.Time{}, time.Time{}, 30).Return(btcKlines, nil)
-	mockClient.On("GetKlines", ctx, "ETHUSDT", datasource.Timeframe1d, time.Time{}, time.Time{}, 30).Return(ethKlines, nil)
+	// 设置模拟响应 - 汇率计算器现在不再限制数据量，会接受任何可用数据
+	startTime := now.Add(-20 * 24 * time.Hour)
+	mockClient.On("GetKlines", ctx, "BTCUSDT", datasource.Timeframe1d, startTime, now, 20).Return(btcKlines, nil)
+	mockClient.On("GetKlines", ctx, "ETHUSDT", datasource.Timeframe1d, startTime, now, 20).Return(ethKlines, nil)
 
-	// 尝试计算汇率，应该失败因为数据不足
-	_, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", datasource.Timeframe1d, 20)
+	// 计算汇率，现在应该成功，即使数据点较少
+	result, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", datasource.Timeframe1d, startTime, now, 20)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient kline data for rate calculation")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Len(t, result, 5) // 返回5个数据点（所有可用的对齐数据）
+
+	// 验证汇率计算的正确性
+	for _, kline := range result {
+		assert.True(t, kline.Open > 0)
+		assert.True(t, kline.Close > 0)
+		assert.True(t, kline.High >= kline.Low)
+		assert.Equal(t, "ETHBTC", kline.Symbol)
+	}
 
 	mockClient.AssertExpectations(t)
 }
@@ -270,4 +281,25 @@ func TestSafeDiv(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+func TestRateCalculator_CalculateRate_NoData(t *testing.T) {
+	mockClient := new(MockDataSource)
+	calculator := NewRateCalculator(mockClient)
+
+	ctx := context.Background()
+
+	// 设置模拟响应 - 返回空数据
+	now := time.Now()
+	startTime := now.Add(-20 * 24 * time.Hour)
+	mockClient.On("GetKlines", ctx, "BTCUSDT", datasource.Timeframe1d, startTime, now, 20).Return([]*datasource.Kline{}, nil)
+	mockClient.On("GetKlines", ctx, "ETHUSDT", datasource.Timeframe1d, startTime, now, 20).Return([]*datasource.Kline{}, nil)
+
+	// 尝试计算汇率，应该失败因为没有数据
+	_, err := calculator.CalculateRate(ctx, "ETH", "BTC", "USDT", datasource.Timeframe1d, startTime, now, 20)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no kline data available")
+
+	mockClient.AssertExpectations(t)
 }

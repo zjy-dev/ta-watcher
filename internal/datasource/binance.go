@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ type BinanceClient struct {
 
 // NewBinanceClient 创建Binance客户端
 func NewBinanceClient() *BinanceClient {
+	log.Printf("🔗 初始化 Binance 数据源")
 	return &BinanceClient{
 		baseURL: "https://api.binance.com",
 		client:  &http.Client{Timeout: 30 * time.Second},
@@ -43,7 +45,12 @@ func (b *BinanceClient) IsSymbolValid(ctx context.Context, symbol string) (bool,
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK, nil
+	valid := resp.StatusCode == http.StatusOK
+	if !valid {
+		log.Printf("❌ [Binance] %s 不存在", symbol)
+	}
+
+	return valid, nil
 }
 
 // GetKlines 获取K线数据
@@ -74,6 +81,7 @@ func (b *BinanceClient) GetKlines(ctx context.Context, symbol string, timeframe 
 	}
 
 	req.URL.RawQuery = q.Encode()
+	// log.Printf("🌐 [Binance] 请求URL: %s", req.URL.String())
 
 	resp, err := b.client.Do(req)
 	if err != nil {

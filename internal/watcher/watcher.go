@@ -25,7 +25,7 @@ type Watcher struct {
 // New 创建新的监控器
 func New(cfg *config.Config) (*Watcher, error) {
 	factory := datasource.NewFactory()
-	ds, err := factory.CreateDataSource("binance", cfg)
+	ds, err := factory.CreateDataSource(cfg.DataSource.Primary, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create data source: %w", err)
 	}
@@ -36,7 +36,6 @@ func New(cfg *config.Config) (*Watcher, error) {
 	rsiStrategy, err := strategyFactory.CreateStrategy("rsi_oversold")
 	if err == nil {
 		strategies = append(strategies, rsiStrategy)
-		log.Printf("✅ Created strategy: %s", rsiStrategy.Name())
 	}
 
 	// 创建通知管理器
@@ -45,23 +44,15 @@ func New(cfg *config.Config) (*Watcher, error) {
 	// 添加邮件通知器
 	if cfg.Notifiers.Email.Enabled {
 		emailNotifier, err := notifiers.NewEmailNotifier(&cfg.Notifiers.Email)
-		if err != nil {
-			log.Printf("⚠️ 创建邮件通知器失败: %v", err)
-		} else {
-			if err := notifierManager.AddNotifier(emailNotifier); err != nil {
-				log.Printf("⚠️ 添加邮件通知器失败: %v", err)
-			} else {
+		if err == nil {
+			if err := notifierManager.AddNotifier(emailNotifier); err == nil {
 				log.Printf("✅ 邮件通知器已启用")
 			}
 		}
-	} else {
-		log.Printf("📧 邮件通知已禁用")
 	}
 
 	// 创建汇率计算器
 	rateCalculator := assets.NewRateCalculator(ds)
-
-	log.Printf("✅ Created data source: %s with %d strategies", ds.Name(), len(strategies))
 
 	return &Watcher{
 		dataSource:      ds,
@@ -88,8 +79,6 @@ func (w *Watcher) Start(ctx context.Context) error {
 
 // Watch 监控单个交易对
 func (w *Watcher) Watch(ctx context.Context, symbol string, timeframe datasource.Timeframe) error {
-	log.Printf("🚀 开始监控 %s (%s)", symbol, timeframe)
-
 	maxDataPoints := 50
 	for _, strat := range w.strategies {
 		if required := strat.RequiredDataPoints(); required > maxDataPoints {
@@ -103,7 +92,6 @@ func (w *Watcher) Watch(ctx context.Context, symbol string, timeframe datasource
 	for {
 		select {
 		case <-ctx.Done():
-			log.Printf("⏹️ 停止监控 %s", symbol)
 			return nil
 		case <-ticker.C:
 			if err := w.analyzeSymbol(ctx, symbol, timeframe, maxDataPoints); err != nil {
@@ -161,15 +149,15 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 	klines, err := w.dataSource.GetKlines(ctx, symbol, timeframe, startTime, endTime, maxDataPoints*2)
 	if err != nil {
 		// 如果直接获取失败，尝试计算汇率对
-		calculatedKlines, calcErr := w.tryCalculateRatePair(ctx, symbol, timeframe, maxDataPoints*2)
+		calculatedKlines, calcErr := w.tryCalculateRatePair(ctx, symbol, timeframe, startTime, endTime, maxDataPoints*2)
 		if calcErr != nil {
 			return fmt.Errorf("获取K线数据失败，计算汇率也失败: 原始错误=%v, 计算错误=%v", err, calcErr)
 		}
 		klines = calculatedKlines
-		log.Printf("💱 %s: 使用计算汇率数据 (%d 个数据点)", symbol, len(klines))
 	}
 
 	if len(klines) < maxDataPoints {
+		log.Printf("⚠️ [%s %s] 数据不足: %d/%d", symbol, timeframe, len(klines), maxDataPoints)
 		return fmt.Errorf("数据点不足: 需要 %d，实际 %d", maxDataPoints, len(klines))
 	}
 
@@ -183,18 +171,16 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 	for _, strat := range w.strategies {
 		result, err := strat.Evaluate(marketData)
 		if err != nil {
-			log.Printf("⚠️ %s 策略评估错误: %v", strat.Name(), err)
+			log.Printf("❌ [%s %s] 策略错误: %v", symbol, timeframe, err)
 			continue
 		}
 
 		if result != nil {
-			// 总是显示策略值，不管是否触发信号
+			// 只显示RSI结果和信号
 			if rsiValue, exists := result.Indicators["rsi"]; exists {
 				if result.ShouldNotify() {
-					// 触发信号时用醒目的标记
-					log.Printf("🚨 信号: %s/%s (%s) - RSI:%.1f %s (%.1f%%)",
-						symbol, timeframe, strat.Name(), rsiValue, result.Signal.String(), result.Confidence*100)
-
+					// 触发信号时
+					log.Printf("🚨 [%s %s] RSI:%.1f %s", symbol, timeframe, rsiValue, result.Signal.String())
 					// 发送邮件通知
 					if rsiVal, ok := rsiValue.(float64); ok {
 						w.sendNotification(symbol, timeframe, strat.Name(), result, rsiVal)
@@ -202,21 +188,8 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 						w.sendNotification(symbol, timeframe, strat.Name(), result, 0)
 					}
 				} else {
-					// 未触发信号时也显示RSI值
-					log.Printf("📈 %s/%s (%s) - RSI:%.1f %s",
-						symbol, timeframe, strat.Name(), rsiValue, result.Signal.String())
-				}
-			} else {
-				// 其他类型的策略
-				if result.ShouldNotify() {
-					log.Printf("🚨 信号: %s/%s (%s) - %s (%.1f%%)",
-						symbol, timeframe, strat.Name(), result.Signal.String(), result.Confidence*100)
-
-					// 发送邮件通知
-					w.sendNotification(symbol, timeframe, strat.Name(), result, 0)
-				} else {
-					log.Printf("📈 %s/%s (%s) - %s",
-						symbol, timeframe, strat.Name(), result.Signal.String())
+					// 正常状态
+					log.Printf("📗 [%s %s] RSI:%.1f", symbol, timeframe, rsiValue)
 				}
 			}
 		}
@@ -346,7 +319,7 @@ func (w *Watcher) GetStatus() map[string]interface{} {
 }
 
 // tryCalculateRatePair 尝试计算汇率对
-func (w *Watcher) tryCalculateRatePair(ctx context.Context, symbol string, timeframe datasource.Timeframe, limit int) ([]*datasource.Kline, error) {
+func (w *Watcher) tryCalculateRatePair(ctx context.Context, symbol string, timeframe datasource.Timeframe, startTime, endTime time.Time, limit int) ([]*datasource.Kline, error) {
 	// 检查是否是已知的计算汇率对
 	// 目前支持的计算汇率对模式：ADASOL、BTCETH 等
 	if len(symbol) < 6 {
@@ -376,7 +349,7 @@ func (w *Watcher) tryCalculateRatePair(ctx context.Context, symbol string, timef
 		if w.isValidCryptoSymbol(baseSymbol) && w.isValidCryptoSymbol(quoteSymbol) {
 			log.Printf("💱 尝试计算 %s/%s 汇率，通过 %s 桥接", baseSymbol, quoteSymbol, bridgeCurrency)
 
-			klines, err := w.rateCalculator.CalculateRate(ctx, baseSymbol, quoteSymbol, bridgeCurrency, timeframe, limit)
+			klines, err := w.rateCalculator.CalculateRate(ctx, baseSymbol, quoteSymbol, bridgeCurrency, timeframe, startTime, endTime, limit)
 			if err == nil && len(klines) > 0 {
 				return klines, nil
 			}

@@ -2,6 +2,7 @@ package datasource
 
 import (
 	"fmt"
+	"log"
 
 	"ta-watcher/internal/config"
 )
@@ -16,6 +17,8 @@ func NewFactory() *Factory {
 
 // CreateDataSource 根据配置创建数据源
 func (f *Factory) CreateDataSource(sourceType string, cfg *config.Config) (DataSource, error) {
+	log.Printf("🏭 创建数据源: %s", sourceType)
+
 	switch sourceType {
 	case "binance":
 		client := NewBinanceClient()
@@ -24,6 +27,7 @@ func (f *Factory) CreateDataSource(sourceType string, cfg *config.Config) (DataS
 		client := NewCoinbaseClient()
 		return client, nil
 	default:
+		log.Printf("❌ 不支持的数据源类型: %s", sourceType)
 		return nil, fmt.Errorf("unsupported data source type: %s", sourceType)
 	}
 }

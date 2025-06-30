@@ -41,6 +41,9 @@ func main() {
 	// 设置日志输出
 	setupLogging()
 
+	// 打印启动横幅
+	printBanner()
+
 	// 显示版本信息
 	if *version {
 		fmt.Printf("%s v%s - %s\n", AppName, AppVersion, AppDesc)
@@ -61,17 +64,20 @@ func main() {
 
 func run() error {
 	// 加载配置
+	log.Printf("📂 加载配置: %s", *configPath)
 	cfg, err := config.LoadConfig(*configPath)
 	if err != nil {
+		log.Printf("❌ 配置加载失败: %v", err)
 		return fmt.Errorf("配置加载失败: %w", err)
 	}
 
-	log.Printf("=== %s v%s 启动中 ===", AppName, AppVersion)
-	log.Printf("配置文件: %s", *configPath)
+	// 打印配置概要
+	printConfigSummary(cfg)
 
 	// 创建新架构的 Watcher
 	w, err := watcher.New(cfg)
 	if err != nil {
+		log.Printf("❌ 监控器创建失败: %v", err)
 		return fmt.Errorf("Watcher 创建失败: %w", err)
 	}
 
@@ -85,10 +91,11 @@ func run() error {
 	// 启动 Watcher
 	if *singleRun {
 		// 单次运行模式：执行一次检查后退出
-		log.Println("=== 单次运行模式 ===")
+		log.Printf("🔄 单次运行模式")
 		return runSingleCheck(ctx, w, cfg)
 	}
 
+	log.Printf("🔄 守护进程模式")
 	// 启动监控
 	go func() {
 		if err := w.Start(ctx); err != nil {
@@ -325,4 +332,20 @@ func isValidTimeframe(tf datasource.Timeframe) bool {
 		}
 	}
 	return false
+}
+
+// printBanner 打印启动横幅
+func printBanner() {
+	log.Printf("════════════════════════════════════════")
+	log.Printf("🚀 %s v%s", AppName, AppVersion)
+	log.Printf("════════════════════════════════════════")
+}
+
+// printConfigSummary 打印配置概要
+func printConfigSummary(cfg *config.Config) {
+	log.Printf("📊 配置: %s数据源, %d币种, %d时间框架, 邮件:%t",
+		cfg.DataSource.Primary,
+		len(cfg.Assets.Symbols),
+		len(cfg.Assets.Timeframes),
+		cfg.Notifiers.Email.Enabled)
 }

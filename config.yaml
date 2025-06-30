@@ -3,7 +3,7 @@
 
 # 数据源配置（新增：支持多数据源切换）
 datasource:
-  primary: "binance"       # 主数据源: binance, coinbase
+  primary: "coinbase"       # 主数据源: binance, coinbase
   fallback: ""              # 备用数据源（留空，避免地理限制）
   timeout: 30s              # 请求超时时间
   max_retries: 3            # 最大重试次数

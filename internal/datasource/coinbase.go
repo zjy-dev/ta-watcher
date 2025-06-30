@@ -47,7 +47,8 @@ func (c *CoinbaseClient) IsSymbolValid(ctx context.Context, symbol string) (bool
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK, nil
+	valid := resp.StatusCode == http.StatusOK
+	return valid, nil
 }
 
 // GetKlines 获取K线数据（支持分页和聚合）
@@ -70,11 +71,26 @@ func (c *CoinbaseClient) GetKlines(ctx context.Context, symbol string, timeframe
 		baseGranularity = 86400 // 使用日线数据进行聚合
 	}
 
+	// 设置默认时间范围
+	if startTime.IsZero() || endTime.IsZero() {
+		now := time.Now()
+		if endTime.IsZero() {
+			endTime = now
+		}
+		if startTime.IsZero() {
+			// 根据请求的数据量设置开始时间
+			duration := time.Duration(limit*baseGranularity) * time.Second
+			startTime = endTime.Add(-duration)
+		}
+	}
+
 	var allKlines []*Kline
 	batchSize := 300 // Coinbase API限制
+	batchCount := 0
 
 	// 分批获取数据
 	for currentEnd := endTime; currentEnd.After(startTime); {
+		batchCount++
 		currentStart := currentEnd.Add(-time.Duration(batchSize) * time.Second * time.Duration(baseGranularity))
 		if currentStart.Before(startTime) {
 			currentStart = startTime
@@ -113,6 +129,9 @@ func (c *CoinbaseClient) GetKlines(ctx context.Context, symbol string, timeframe
 	// 限制返回数量
 	if len(allKlines) > limit {
 		allKlines = allKlines[len(allKlines)-limit:]
+	}
+
+	if len(allKlines) > 0 {
 	}
 
 	return allKlines, nil
@@ -251,13 +270,16 @@ func (c *CoinbaseClient) aggregateKlines(dailyKlines []*Kline, targetTimeframe T
 
 		switch targetTimeframe {
 		case Timeframe1w:
-			// 周线：周一开始新周期
-			if kline.OpenTime.Weekday() == time.Monday && kline.OpenTime.After(lastKline.OpenTime.Add(6*24*time.Hour)) {
+			// 周线：计算周开始日期（以周一为起始）
+			lastWeekStart := getWeekStart(lastKline.OpenTime)
+			currentWeekStart := getWeekStart(kline.OpenTime)
+			if !lastWeekStart.Equal(currentWeekStart) {
 				shouldStartNew = true
 			}
 		case Timeframe1M:
-			// 月线：月初开始新周期
-			if kline.OpenTime.Day() == 1 && kline.OpenTime.Month() != lastKline.OpenTime.Month() {
+			// 月线：不同月份开始新周期
+			if kline.OpenTime.Year() != lastKline.OpenTime.Year() ||
+				kline.OpenTime.Month() != lastKline.OpenTime.Month() {
 				shouldStartNew = true
 			}
 		}
@@ -313,4 +335,17 @@ func (c *CoinbaseClient) aggregatePeriod(klines []*Kline) *Kline {
 	}
 
 	return aggregated
+}
+
+// getWeekStart 获取给定时间所在周的周一
+func getWeekStart(t time.Time) time.Time {
+	// Go中 Sunday=0, Monday=1, ..., Saturday=6
+	weekday := int(t.Weekday())
+	if weekday == 0 { // Sunday
+		weekday = 7 // 转换为 Monday=1, ..., Sunday=7
+	}
+	// 计算到周一的天数差
+	daysFromMonday := weekday - 1
+	// 返回周一的日期（保持时间部分）
+	return t.AddDate(0, 0, -daysFromMonday)
 }

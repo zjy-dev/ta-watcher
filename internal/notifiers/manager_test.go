@@ -172,34 +172,6 @@ func TestManagerSendWithNilNotification(t *testing.T) {
 	assert.Contains(t, err.Error(), "notification cannot be nil")
 }
 
-func TestManagerSendWithFilter(t *testing.T) {
-	manager := NewManager()
-	notifier := NewMockNotifier("test", true)
-	manager.AddNotifier(notifier)
-
-	// 设置过滤器 - 只允许 WARNING 级别以上
-	filter := &NotificationFilter{
-		MinLevel: LevelWarning,
-	}
-	manager.SetFilter(filter)
-
-	// 发送 INFO 级别的通知（应该被过滤）
-	infoNotification := mockNotification()
-	infoNotification.Level = LevelInfo
-
-	err := manager.Send(infoNotification)
-	assert.NoError(t, err)
-	assert.Len(t, notifier.GetSentMessages(), 0) // 被过滤，不应该收到
-
-	// 发送 WARNING 级别的通知（应该通过）
-	warningNotification := mockNotification()
-	warningNotification.Level = LevelWarning
-
-	err = manager.Send(warningNotification)
-	assert.NoError(t, err)
-	assert.Len(t, notifier.GetSentMessages(), 1) // 应该收到
-}
-
 func TestManagerSendTo(t *testing.T) {
 	manager := NewManager()
 
@@ -308,33 +280,6 @@ func TestManagerGetNotifiers(t *testing.T) {
 	// 验证返回的是副本（修改不会影响原始数据）
 	notifiers = append(notifiers, NewMockNotifier("test3", true))
 	assert.Equal(t, 2, manager.TotalCount()) // 原始管理器不应该受影响
-}
-
-func TestManagerSetAndGetFilter(t *testing.T) {
-	manager := NewManager()
-
-	// 默认过滤器
-	filter := manager.GetFilter()
-	assert.NotNil(t, filter)
-
-	// 设置新过滤器
-	newFilter := &NotificationFilter{
-		MinLevel: LevelWarning,
-		Types:    []NotificationType{TypePriceAlert},
-		Assets:   []string{"BTCUSDT"},
-	}
-	manager.SetFilter(newFilter)
-
-	retrievedFilter := manager.GetFilter()
-	assert.Equal(t, newFilter, retrievedFilter)
-
-	// 设置 nil 过滤器（应该设置为默认过滤器）
-	manager.SetFilter(nil)
-	retrievedFilter = manager.GetFilter()
-	assert.NotNil(t, retrievedFilter)
-	assert.Equal(t, NotificationLevel(0), retrievedFilter.MinLevel)
-	assert.Empty(t, retrievedFilter.Types)
-	assert.Empty(t, retrievedFilter.Assets)
 }
 
 func TestManagerConcurrency(t *testing.T) {

@@ -4,31 +4,6 @@ import (
 	"time"
 )
 
-// NotificationLevel 通知级别
-type NotificationLevel int
-
-const (
-	LevelInfo NotificationLevel = iota
-	LevelWarning
-	LevelError
-	LevelCritical
-)
-
-func (l NotificationLevel) String() string {
-	switch l {
-	case LevelInfo:
-		return "INFO"
-	case LevelWarning:
-		return "WARNING"
-	case LevelError:
-		return "ERROR"
-	case LevelCritical:
-		return "CRITICAL"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 // NotificationType 通知类型
 type NotificationType int
 
@@ -58,7 +33,6 @@ func (t NotificationType) String() string {
 type Notification struct {
 	ID        string                 `json:"id"`        // 通知唯一标识
 	Type      NotificationType       `json:"type"`      // 通知类型
-	Level     NotificationLevel      `json:"level"`     // 通知级别
 	Asset     string                 `json:"asset"`     // 相关资产
 	Strategy  string                 `json:"strategy"`  // 相关策略
 	Title     string                 `json:"title"`     // 通知标题
@@ -101,49 +75,4 @@ type NotificationManager interface {
 
 	// GetNotifiers 获取所有通知器
 	GetNotifiers() []Notifier
-}
-
-// NotificationFilter 通知过滤器
-type NotificationFilter struct {
-	MinLevel NotificationLevel  // 最小级别
-	Types    []NotificationType // 允许的类型
-	Assets   []string           // 允许的资产
-}
-
-// ShouldNotify 判断是否应该发送通知
-func (f *NotificationFilter) ShouldNotify(notification *Notification) bool {
-	// 检查级别
-	if notification.Level < f.MinLevel {
-		return false
-	}
-
-	// 检查类型
-	if len(f.Types) > 0 {
-		found := false
-		for _, t := range f.Types {
-			if t == notification.Type {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	// 检查资产
-	if len(f.Assets) > 0 && notification.Asset != "" {
-		found := false
-		for _, asset := range f.Assets {
-			if asset == notification.Asset {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	return true
 }

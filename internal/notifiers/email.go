@@ -61,43 +61,85 @@ func NewEmailNotifier(cfg *config.EmailConfig) (*EmailNotifier, error) {
 
 // parseTemplate 解析邮件模板
 func (e *EmailNotifier) parseTemplate() error {
-	// 默认邮件模板
+	// 统一的交易信号邮件模板
 	defaultTemplate := `
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .header { background-color: {{.HeaderColor}}; color: white; padding: 15px; border-radius: 5px 5px 0 0; }
-        .content { background-color: #f9f9f9; padding: 20px; border: 1px solid #ddd; border-radius: 0 0 5px 5px; }
-        .info { margin: 10px 0; }
-        .info strong { color: #333; }
-        .timestamp { color: #666; font-size: 0.9em; }
-        .data { background-color: #fff; padding: 10px; border-left: 4px solid {{.HeaderColor}}; margin: 10px 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            line-height: 1.6; 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f5f5f5; 
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .header { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            color: white; 
+            padding: 25px; 
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .header .timestamp { 
+            color: rgba(255, 255, 255, 0.9); 
+            font-size: 14px; 
+            margin-top: 8px;
+        }
+        .content { 
+            padding: 30px; 
+        }
+        .message-content {
+            font-size: 16px;
+            line-height: 1.8;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: #6c757d;
+            border-top: 1px solid #dee2e6;
+        }
+        /* 响应式设计 */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .container { margin: 0; }
+            .header, .content { padding: 20px; }
+            .header h1 { font-size: 20px; }
+        }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h2>{{.Title}}</h2>
-        <div class="timestamp">{{.FormattedTime}}</div>
-    </div>
-    <div class="content">
-        <div class="info"><strong>级别:</strong> {{.Level}}</div>
-        <div class="info"><strong>类型:</strong> {{.Type}}</div>
-        {{if .Asset}}<div class="info"><strong>资产:</strong> {{.Asset}}</div>{{end}}
-        {{if .Strategy}}<div class="info"><strong>策略:</strong> {{.Strategy}}</div>{{end}}
-        <div class="info"><strong>消息:</strong></div>
-        <div class="data">{{.Message}}</div>
-        {{if .Data}}
-        <div class="info"><strong>详细数据:</strong></div>
-        <div class="data">
-            {{range $key, $value := .Data}}
-            <strong>{{$key}}:</strong> {{$value}}<br>
-            {{end}}
+    <div class="container">
+        <div class="header">
+            <h1>{{.Title}}</h1>
+            <div class="timestamp">{{.FormattedTime}}</div>
         </div>
-        {{end}}
+        <div class="content">
+            <div class="message-content">
+                {{.Message}}
+            </div>
+        </div>
+        <div class="footer">
+            <p>此邮件由 TA Watcher 自动发送，请勿回复。</p>
+            <p>如需帮助，请联系系统管理员。</p>
+        </div>
     </div>
 </body>
 </html>
@@ -160,11 +202,9 @@ func (e *EmailNotifier) prepareEmail(notification *Notification) (string, string
 	data := struct {
 		*Notification
 		FormattedTime string
-		HeaderColor   string
 	}{
 		Notification:  notification,
 		FormattedTime: notification.Timestamp.Format("2006-01-02 15:04:05"),
-		HeaderColor:   e.getLevelColor(notification.Level),
 	}
 
 	// 渲染邮件内容
@@ -187,22 +227,6 @@ func (e *EmailNotifier) prepareEmail(notification *Notification) (string, string
 	}
 
 	return subject, body.String(), nil
-}
-
-// getLevelColor 根据级别获取颜色
-func (e *EmailNotifier) getLevelColor(level NotificationLevel) string {
-	switch level {
-	case LevelInfo:
-		return "#2196F3" // 蓝色
-	case LevelWarning:
-		return "#FF9800" // 橙色
-	case LevelError:
-		return "#F44336" // 红色
-	case LevelCritical:
-		return "#9C27B0" // 紫色
-	default:
-		return "#757575" // 灰色
-	}
 }
 
 // buildMessage 构建邮件消息

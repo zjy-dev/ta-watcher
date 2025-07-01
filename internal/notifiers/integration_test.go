@@ -58,7 +58,6 @@ func TestEmailNotifierIntegration(t *testing.T) {
 	notification := &Notification{
 		ID:        "integration-test-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypeSystemAlert,
-		Level:     LevelInfo,
 		Asset:     "BTCUSDT",
 		Strategy:  "integration_test",
 		Title:     "TA Watcher 集成测试",
@@ -125,33 +124,28 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 	assert.Equal(t, 1, manager.TotalCount(), "管理器应该包含1个通知器")
 	assert.Equal(t, 1, manager.EnabledCount(), "管理器应该有1个启用的通知器")
 
-	// 设置过滤器（只允许警告级别以上的通知）
-	filter := &NotificationFilter{
-		MinLevel: LevelWarning,
-		Types:    []NotificationType{TypePriceAlert, TypeStrategySignal},
-	}
-	manager.SetFilter(filter)
-	t.Log("🔽 已设置过滤器：只发送警告级别以上的价格警报和策略信号")
-
-	// 发送一个 INFO 级别的通知（应该被过滤掉）
-	infoNotification := &Notification{
-		ID:        "integration-filtered-" + strconv.FormatInt(time.Now().Unix(), 10),
+	// 发送系统告警通知
+	systemNotification := &Notification{
+		ID:        "integration-system-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypeSystemAlert,
-		Level:     LevelInfo,
-		Title:     "这条消息应该被过滤",
-		Message:   "您不应该收到这封邮件，因为它应该被过滤器过滤掉。",
+		Title:     "系统告警测试",
+		Message:   "这是一条系统告警消息，用于测试通知管理器的功能。",
 		Timestamp: time.Now(),
+		Data: map[string]interface{}{
+			"alert_type": "system",
+			"component":  "watcher",
+			"status":     "running",
+		},
 	}
 
-	t.Log("📧 正在发送被过滤的通知（不应该发送）...")
-	err = manager.Send(infoNotification)
-	assert.NoError(t, err, "发送被过滤的通知应该成功（但实际不会发送邮件）")
+	t.Log("📧 正在发送系统告警通知...")
+	err = manager.Send(systemNotification)
+	assert.NoError(t, err, "发送系统告警通知应该成功")
 
-	// 发送一个 WARNING 级别的价格警报（应该通过过滤器）
-	warningNotification := &Notification{
-		ID:        "integration-warning-" + strconv.FormatInt(time.Now().Unix(), 10),
+	// 发送价格警报通知
+	priceNotification := &Notification{
+		ID:        "integration-price-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypePriceAlert,
-		Level:     LevelWarning,
 		Asset:     "BTCUSDT",
 		Strategy:  "price_monitor",
 		Title:     "比特币价格警报",
@@ -166,15 +160,14 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 		},
 	}
 
-	t.Log("📧 正在发送警告级别通知（应该会发送）...")
-	err = manager.Send(warningNotification)
-	assert.NoError(t, err, "发送警告级别通知应该成功")
+	t.Log("📧 正在发送价格警报通知...")
+	err = manager.Send(priceNotification)
+	assert.NoError(t, err, "发送价格警报通知应该成功")
 
-	// 发送一个 CRITICAL 级别的策略信号
-	criticalNotification := &Notification{
-		ID:        "integration-critical-" + strconv.FormatInt(time.Now().Unix(), 10),
+	// 发送策略信号通知
+	strategyNotification := &Notification{
+		ID:        "integration-strategy-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypeStrategySignal,
-		Level:     LevelCritical,
 		Asset:     "ETHUSDT",
 		Strategy:  "golden_cross",
 		Title:     "以太坊金叉信号",
@@ -190,15 +183,12 @@ func TestEmailNotifierIntegrationWithManager(t *testing.T) {
 		},
 	}
 
-	t.Log("📧 正在发送关键级别通知（应该会发送）...")
-	err = manager.Send(criticalNotification)
-	assert.NoError(t, err, "发送关键级别通知应该成功")
+	t.Log("📧 正在发送策略信号通知...")
+	err = manager.Send(strategyNotification)
+	assert.NoError(t, err, "发送策略信号通知应该成功")
 
-	t.Log("✅ 集成测试完成成功")
-	t.Log("📬 请检查您的邮箱：")
-	t.Log("   - 您不应该收到 INFO 级别的消息（已被过滤）")
-	t.Log("   - 您应该收到 WARNING 级别的价格警报")
-	t.Log("   - 您应该收到 CRITICAL 级别的策略信号")
+	t.Log("✅ 通知管理器集成测试完成")
+	t.Log("📬 请检查您的邮箱以确认收到了所有测试邮件")
 
 	// 关闭管理器
 	err = manager.Close()
@@ -234,7 +224,7 @@ func TestEmailSendWithTemplateIntegration(t *testing.T) {
 	emailConfig.Template = `
 亲爱的用户，
 
-您好！这是来自 TA Watcher 的{{.Level}}级别通知。
+您好！这是来自 TA Watcher 的交易信号通知。
 
 📊 交易对: {{.Asset}}
 🎯 策略: {{.Strategy}}
@@ -257,7 +247,6 @@ func TestEmailSendWithTemplateIntegration(t *testing.T) {
 	notification := &Notification{
 		ID:        "template-test-" + strconv.FormatInt(time.Now().Unix(), 10),
 		Type:      TypePriceAlert,
-		Level:     LevelWarning,
 		Asset:     "BTCUSDT",
 		Strategy:  "template_test",
 		Title:     "模板测试邮件",

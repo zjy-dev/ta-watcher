@@ -8,7 +8,6 @@ import (
 // Manager 通知管理器实现
 type Manager struct {
 	notifiers map[string]Notifier
-	filter    *NotificationFilter
 	mu        sync.RWMutex
 }
 
@@ -16,7 +15,6 @@ type Manager struct {
 func NewManager() *Manager {
 	return &Manager{
 		notifiers: make(map[string]Notifier),
-		filter:    &NotificationFilter{}, // 默认无过滤
 	}
 }
 
@@ -61,11 +59,6 @@ func (m *Manager) RemoveNotifier(name string) error {
 func (m *Manager) Send(notification *Notification) error {
 	if notification == nil {
 		return fmt.Errorf("notification cannot be nil")
-	}
-
-	// 检查过滤器
-	if !m.filter.ShouldNotify(notification) {
-		return nil // 被过滤，不发送
 	}
 
 	m.mu.RLock()
@@ -155,26 +148,6 @@ func (m *Manager) GetNotifiers() []Notifier {
 	}
 
 	return notifiers
-}
-
-// SetFilter 设置通知过滤器
-func (m *Manager) SetFilter(filter *NotificationFilter) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	if filter == nil {
-		m.filter = &NotificationFilter{} // 默认无过滤
-	} else {
-		m.filter = filter
-	}
-}
-
-// GetFilter 获取当前过滤器
-func (m *Manager) GetFilter() *NotificationFilter {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	return m.filter
 }
 
 // GetNotifier 获取指定名称的通知器

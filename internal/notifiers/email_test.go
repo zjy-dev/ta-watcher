@@ -98,7 +98,6 @@ func TestEmailNotifierSendDisabled(t *testing.T) {
 	notification := &Notification{
 		ID:        "test-1",
 		Type:      TypeSystemAlert,
-		Level:     LevelInfo,
 		Title:     "Test Notification",
 		Message:   "This is a test",
 		Timestamp: time.Now(),
@@ -121,7 +120,7 @@ func TestEmailNotifierTemplateRendering(t *testing.T) {
 		},
 		From:     "test@gmail.com",
 		To:       []string{"recipient@gmail.com"},
-		Subject:  "Alert: {{.Asset}} - {{.Level}}",
+		Subject:  "Alert: {{.Asset}} - {{.Title}}",
 		Template: "Asset: {{.Asset}}, Message: {{.Message}}",
 	}
 
@@ -131,7 +130,6 @@ func TestEmailNotifierTemplateRendering(t *testing.T) {
 	notification := &Notification{
 		ID:        "test-1",
 		Type:      TypePriceAlert,
-		Level:     LevelWarning,
 		Asset:     "BTCUSDT",
 		Title:     "Price Alert",
 		Message:   "Price exceeded threshold",
@@ -146,44 +144,9 @@ func TestEmailNotifierTemplateRendering(t *testing.T) {
 	subject, body, err := notifier.prepareEmail(notification)
 	assert.NoError(t, err)
 	assert.Contains(t, subject, "BTCUSDT")
-	assert.Contains(t, subject, "WARNING")
+	assert.Contains(t, subject, "Price Alert")
 	assert.Contains(t, body, "BTCUSDT")
 	assert.Contains(t, body, "Price exceeded threshold")
-}
-
-func TestEmailNotifierLevelColors(t *testing.T) {
-	config := &config.EmailConfig{
-		Enabled: true,
-		SMTP: config.SMTPConfig{
-			Host:     "smtp.gmail.com",
-			Port:     587,
-			Username: "test@gmail.com",
-			Password: "password",
-			TLS:      true,
-		},
-		From: "test@gmail.com",
-		To:   []string{"recipient@gmail.com"},
-	}
-
-	notifier, err := NewEmailNotifier(config)
-	assert.NoError(t, err)
-
-	tests := []struct {
-		level    NotificationLevel
-		expected string
-	}{
-		{LevelInfo, "#2196F3"},
-		{LevelWarning, "#FF9800"},
-		{LevelError, "#F44336"},
-		{LevelCritical, "#9C27B0"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.level.String(), func(t *testing.T) {
-			color := notifier.getLevelColor(tt.level)
-			assert.Equal(t, tt.expected, color)
-		})
-	}
 }
 
 func TestEmailNotifierSetEnabled(t *testing.T) {
@@ -217,25 +180,6 @@ func TestEmailNotifierClose(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestNotificationLevelString(t *testing.T) {
-	tests := []struct {
-		level    NotificationLevel
-		expected string
-	}{
-		{LevelInfo, "INFO"},
-		{LevelWarning, "WARNING"},
-		{LevelError, "ERROR"},
-		{LevelCritical, "CRITICAL"},
-		{NotificationLevel(999), "UNKNOWN"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			assert.Equal(t, tt.expected, tt.level.String())
-		})
-	}
-}
-
 func TestNotificationTypeString(t *testing.T) {
 	tests := []struct {
 		nType    NotificationType
@@ -253,87 +197,6 @@ func TestNotificationTypeString(t *testing.T) {
 			assert.Equal(t, tt.expected, tt.nType.String())
 		})
 	}
-}
-
-func TestNotificationFilter(t *testing.T) {
-	filter := &NotificationFilter{
-		MinLevel: LevelWarning,
-		Types:    []NotificationType{TypePriceAlert, TypeStrategySignal},
-		Assets:   []string{"BTCUSDT", "ETHUSDT"},
-	}
-
-	tests := []struct {
-		name         string
-		notification *Notification
-		expected     bool
-	}{
-		{
-			name: "should notify - meets all criteria",
-			notification: &Notification{
-				Type:  TypePriceAlert,
-				Level: LevelError,
-				Asset: "BTCUSDT",
-			},
-			expected: true,
-		},
-		{
-			name: "should not notify - level too low",
-			notification: &Notification{
-				Type:  TypePriceAlert,
-				Level: LevelInfo,
-				Asset: "BTCUSDT",
-			},
-			expected: false,
-		},
-		{
-			name: "should not notify - wrong type",
-			notification: &Notification{
-				Type:  TypeSystemAlert,
-				Level: LevelError,
-				Asset: "BTCUSDT",
-			},
-			expected: false,
-		},
-		{
-			name: "should not notify - wrong asset",
-			notification: &Notification{
-				Type:  TypePriceAlert,
-				Level: LevelError,
-				Asset: "ADAUSDT",
-			},
-			expected: false,
-		},
-		{
-			name: "should notify - no asset restriction when notification has no asset",
-			notification: &Notification{
-				Type:  TypePriceAlert,
-				Level: LevelError,
-				Asset: "",
-			},
-			expected: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := filter.ShouldNotify(tt.notification)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestNotificationFilterEmpty(t *testing.T) {
-	// 空过滤器应该允许所有通知
-	filter := &NotificationFilter{}
-
-	notification := &Notification{
-		Type:  TypeSystemAlert,
-		Level: LevelInfo,
-		Asset: "ANYSYMBOL",
-	}
-
-	result := filter.ShouldNotify(notification)
-	assert.True(t, result)
 }
 
 // MockEmailConfig 创建测试用的邮件配置
@@ -359,7 +222,6 @@ func mockNotification() *Notification {
 	return &Notification{
 		ID:        "test-notification-1",
 		Type:      TypePriceAlert,
-		Level:     LevelWarning,
 		Asset:     "BTCUSDT",
 		Strategy:  "test_strategy",
 		Title:     "Price Alert",

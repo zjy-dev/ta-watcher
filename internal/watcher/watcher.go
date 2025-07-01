@@ -329,54 +329,231 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 	}
 
 	// 生成通知标题
-	title := fmt.Sprintf("TA Watcher 交易报告 - %d个信号", len(w.signals))
+	title := fmt.Sprintf("📊 TA Watcher 交易信号报告 - %d个信号", len(w.signals))
 
-	// 生成通知消息
-	message := fmt.Sprintf(`🚀 TA Watcher 交易分析报告
+	// 设置时区
+	loc, _ := time.LoadLocation("Asia/Shanghai") // 可以从配置中读取
+	now := time.Now().In(loc)
 
-📊 报告摘要:
-• 总信号数: %d
-• 买入信号: %d  
-• 卖出信号: %d
-• 生成时间: %s
-• 触发原因: %s
+	// 生成 HTML 格式的邮件内容
+	var messageBuilder strings.Builder
 
-📈 信号详情:`,
-		len(w.signals),
-		buySignals,
-		sellSignals,
-		time.Now().Format("2006-01-02 15:04:05"),
-		reason)
+	// 报告头部摘要
+	messageBuilder.WriteString(`<div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;">`)
+	messageBuilder.WriteString(`<h2 style="margin: 0 0 15px 0; font-size: 24px;">📊 交易信号分析报告</h2>`)
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 16px; opacity: 0.9;">🕐 生成时间: %s (UTC+8)</div>`, now.Format("2006-01-02 15:04:05")))
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 16px; opacity: 0.9;">📝 触发原因: %s</div>`, reason))
+	messageBuilder.WriteString(`</div>`)
 
-	// 添加信号详情
-	for i, signal := range w.signals {
-		if i >= 10 { // 限制显示前10个信号
-			message += fmt.Sprintf("\n... 还有 %d 个信号", len(w.signals)-10)
-			break
-		}
+	// 快速统计面板
+	messageBuilder.WriteString(`<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">`)
 
-		message += fmt.Sprintf(`
-%d. %s (%s) - %s
-   • %s
-   • 详细分析: %s
-   • 策略: %s
-   • 时间: %s`,
-			i+1,
-			signal.Symbol,
-			signal.Timeframe,
-			signal.Signal.String(),
-			signal.IndicatorSummary,
-			signal.DetailedAnalysis,
-			signal.Strategy,
-			signal.Timestamp.Format("15:04:05"))
+	// 总信号数卡片
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;">
+		<div style="font-size: 24px; font-weight: bold; color: #007bff;">%d</div>
+		<div style="font-size: 14px; color: #6c757d;">总信号数</div>
+	</div>`, len(w.signals)))
+
+	// 买入信号卡片
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
+		<div style="font-size: 24px; font-weight: bold; color: #28a745;">%d 🟢</div>
+		<div style="font-size: 14px; color: #6c757d;">买入信号</div>
+	</div>`, buySignals))
+
+	// 卖出信号卡片
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #dc3545; border-radius: 5px;">
+		<div style="font-size: 24px; font-weight: bold; color: #dc3545;">%d 🔴</div>
+		<div style="font-size: 14px; color: #6c757d;">卖出信号</div>
+	</div>`, sellSignals))
+
+	messageBuilder.WriteString(`</div>`)
+
+	// 信号详情部分
+	messageBuilder.WriteString(`<div style="margin-bottom: 25px;">`)
+	messageBuilder.WriteString(`<h3 style="color: #495057; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">📈 交易信号详情</h3>`)
+
+	displayCount := len(w.signals)
+	if displayCount > 10 {
+		displayCount = 10 // 限制显示前10个信号
 	}
 
-	message += `
+	for i := 0; i < displayCount; i++ {
+		signal := w.signals[i]
 
-⚠️ 免责声明: 本报告仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+		// 信号方向颜色和图标
+		signalColor := "#28a745" // 绿色 (买入)
+		signalBgColor := "#d4edda"
+		signalIcon := "🟢"
+		signalText := "买入机会"
+		if signal.Signal == strategy.SignalSell {
+			signalColor = "#dc3545" // 红色 (卖出)
+			signalBgColor = "#f8d7da"
+			signalIcon = "🔴"
+			signalText = "卖出机会"
+		}
 
----
-🤖 此报告由 TA Watcher v1.0.0 自动生成`
+		messageBuilder.WriteString(`<div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`)
+
+		// 信号头部
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 15px; background-color: %s; border-bottom: 1px solid #dee2e6;">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+				<div style="font-size: 20px; font-weight: bold; color: %s;">%s %s</div>
+				<div style="padding: 6px 12px; background-color: %s; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">%s</div>
+			</div>
+			<div style="font-size: 14px; color: #6c757d;">时间框架: %s | 策略: %s | 时间: %s</div>
+		</div>`, signalBgColor, signalColor, signalIcon, signal.Symbol, signalColor, signalText, signal.Timeframe, signal.Strategy, signal.Timestamp.In(loc).Format("15:04:05")))
+
+		// 信号内容区域
+		messageBuilder.WriteString(`<div style="padding: 20px; background-color: white;">`)
+
+		// 指标摘要 - 突出显示
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid %s; border-radius: 5px;">
+			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
+			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: %s; font-weight: bold;">%s</div>
+		</div>`, signalColor, signalColor, signal.IndicatorSummary))
+
+		// 详细分析
+		if signal.DetailedAnalysis != "" {
+			messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px;">
+				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
+				<div style="color: #6c757d; line-height: 1.6;">%s</div>
+			</div>`, signal.DetailedAnalysis))
+		}
+
+		// 关键指标值表格
+		if len(signal.AllIndicators) > 0 {
+			messageBuilder.WriteString(`<div style="margin-bottom: 15px;">
+				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
+				<table style="width: 100%; border-collapse: collapse; font-size: 14px;">`)
+
+			for key, value := range signal.AllIndicators {
+				displayKey := key
+				switch key {
+				case "rsi":
+					displayKey = "RSI指标"
+				case "rsi_period":
+					displayKey = "RSI周期"
+				case "price":
+					displayKey = "当前价格"
+				case "sma_short":
+					displayKey = "短期均线"
+				case "sma_long":
+					displayKey = "长期均线"
+				case "macd":
+					displayKey = "MACD"
+				case "macd_signal":
+					displayKey = "MACD信号线"
+				case "macd_histogram":
+					displayKey = "MACD柱状图"
+				}
+
+				valueStr := fmt.Sprintf("%v", value)
+				if fVal, ok := value.(float64); ok {
+					if fVal < 1 {
+						valueStr = fmt.Sprintf("%.6f", fVal)
+					} else {
+						valueStr = fmt.Sprintf("%.2f", fVal)
+					}
+				}
+
+				messageBuilder.WriteString(fmt.Sprintf(`<tr>
+					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">%s</td>
+					<td style="padding: 8px; border: 1px solid #dee2e6;">%s</td>
+				</tr>`, displayKey, valueStr))
+			}
+			messageBuilder.WriteString(`</table>`)
+			messageBuilder.WriteString(`</div>`)
+		}
+
+		// 阈值信息
+		if len(signal.Thresholds) > 0 {
+			messageBuilder.WriteString(`<div style="margin-bottom: 15px;">
+				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
+				<div style="display: flex; gap: 15px; flex-wrap: wrap;">`)
+
+			for key, value := range signal.Thresholds {
+				displayKey := key
+				switch key {
+				case "overbought_level":
+					displayKey = "超买阈值"
+				case "oversold_level":
+					displayKey = "超卖阈值"
+				case "short_period":
+					displayKey = "短周期"
+				case "long_period":
+					displayKey = "长周期"
+				}
+
+				messageBuilder.WriteString(fmt.Sprintf(`<span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
+					<strong>%s:</strong> %v
+				</span>`, displayKey, value))
+			}
+			messageBuilder.WriteString(`</div></div>`)
+		}
+
+		// 交易建议（如果有的话）
+		if signal.Message != "" {
+			suggestionText := "建议关注"
+			if signal.Signal == strategy.SignalBuy {
+				suggestionText = "💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断"
+			} else if signal.Signal == strategy.SignalSell {
+				suggestionText = "💡 这可能是一个卖出机会，但请结合其他技术指标和市场环境进行综合判断"
+			}
+
+			messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 10px; background-color: %s; border-radius: 5px; margin-top: 10px;">
+				<div style="color: %s; font-size: 14px;">%s</div>
+			</div>`, signalBgColor, signalColor, suggestionText))
+		}
+
+		messageBuilder.WriteString(`</div>`) // 结束内容区域
+		messageBuilder.WriteString(`</div>`) // 结束信号卡片
+	}
+
+	// 如果信号过多，显示提示
+	if len(w.signals) > displayCount {
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-top: 20px; text-align: center; padding: 20px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 10px; color: #856404;">
+			<div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">📝 还有更多信号</div>
+			<div>本次报告显示了前 %d 个信号，还有 %d 个信号未显示</div>
+			<div style="font-size: 14px; margin-top: 10px;">完整信号详情请查看系统日志或下次报告</div>
+		</div>`, displayCount, len(w.signals)-displayCount))
+	}
+
+	messageBuilder.WriteString(`</div>`) // 结束信号详情部分
+
+	// 市场提醒和建议
+	messageBuilder.WriteString(`<div style="margin: 25px 0; padding: 20px; background-color: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 5px;">
+		<h4 style="margin: 0 0 10px 0; color: #1976D2;">💡 交易提醒</h4>
+		<ul style="margin: 0; padding-left: 20px; color: #333;">
+			<li>技术指标仅供参考，建议结合基本面分析</li>
+			<li>请合理控制仓位，设置止损止盈</li>
+			<li>关注市场新闻和重大事件影响</li>
+			<li>避免频繁交易，保持冷静理性</li>
+		</ul>
+	</div>`)
+
+	// 免责声明
+	messageBuilder.WriteString(`<div style="margin: 25px 0; padding: 20px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;">
+		<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ 重要免责声明</h4>
+		<div style="color: #856404; line-height: 1.6;">
+			<p style="margin: 0 0 10px 0;">• 本报告由技术分析系统自动生成，仅供参考学习</p>
+			<p style="margin: 0 0 10px 0;">• 所有交易信号不构成投资建议或买卖推荐</p>
+			<p style="margin: 0 0 10px 0;">• 数字货币投资存在高风险，可能导致本金损失</p>
+			<p style="margin: 0;">• 请根据个人风险承受能力谨慎决策，独立承担投资风险</p>
+		</div>
+	</div>`)
+
+	// 页脚信息
+	messageBuilder.WriteString(`<div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; text-align: center;">
+		<div style="color: #6c757d; font-size: 14px; margin-bottom: 10px;">
+			🤖 此报告由 <strong>TA Watcher v1.0.0</strong> 自动生成
+		</div>
+		<div style="color: #6c757d; font-size: 12px;">
+			生成时间: ` + now.Format("2006-01-02 15:04:05") + ` (UTC+8) | 
+			如有技术问题请联系系统管理员
+		</div>
+	</div>`)
+
+	message := messageBuilder.String()
 
 	// 创建附加数据
 	data := make(map[string]interface{})
@@ -407,7 +584,6 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 	return &notifiers.Notification{
 		ID:        fmt.Sprintf("trading-report-%d", time.Now().Unix()),
 		Type:      notifiers.TypeStrategySignal,
-		Level:     notifiers.LevelWarning,
 		Title:     title,
 		Message:   message,
 		Data:      data,
@@ -425,7 +601,6 @@ func (w *Watcher) sendNoSignalReport() {
 	notification := &notifiers.Notification{
 		ID:    fmt.Sprintf("no-signal-report-%d", time.Now().Unix()),
 		Type:  notifiers.TypeSystemAlert,
-		Level: notifiers.LevelInfo,
 		Title: "TA Watcher 分析报告 - 未发现交易信号",
 		Message: `🔍 TA Watcher 市场分析完成
 

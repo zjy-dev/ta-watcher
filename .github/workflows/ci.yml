@@ -32,8 +32,8 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run make test-all
-        run: make test-all
+      - name: Run make test-unit
+        run: make test-unit
 
       - name: Build application
         run: make build

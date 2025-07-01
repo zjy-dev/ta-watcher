@@ -20,8 +20,8 @@ binance:
 coinbase:
   # 限流配置
   rate_limit:
-    requests_per_minute: 600        # 每分钟最大请求数（Coinbase限制较严）
-    retry_delay: 3s                 # 重试延迟
+    requests_per_minute: 300        # 每分钟最大请求数（降低限流速度）
+    retry_delay: 5s                 # 重试延迟（增加到5秒）
     max_retries: 3                  # 最大重试次数
 
 # 监控配置

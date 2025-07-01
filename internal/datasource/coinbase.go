@@ -7,13 +7,19 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
+
+	"ta-watcher/internal/config"
 )
 
 // CoinbaseClient Coinbase数据源实现
 type CoinbaseClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL      string
+	client       *http.Client
+	rateLimit    *config.RateLimitConfig
+	lastRequest  time.Time
+	requestMutex sync.Mutex
 }
 
 // NewCoinbaseClient 创建Coinbase客户端
@@ -21,7 +27,32 @@ func NewCoinbaseClient() *CoinbaseClient {
 	return &CoinbaseClient{
 		baseURL: "https://api.exchange.coinbase.com",
 		client:  &http.Client{Timeout: 30 * time.Second},
+		rateLimit: &config.RateLimitConfig{
+			RequestsPerMinute: 300, // 默认限流：每分钟300请求
+			RetryDelay:        5 * time.Second,
+			MaxRetries:        3,
+		},
 	}
+}
+
+// NewCoinbaseClientWithConfig 使用配置创建Coinbase客户端
+func NewCoinbaseClientWithConfig(cfg *config.CoinbaseConfig) *CoinbaseClient {
+	client := &CoinbaseClient{
+		baseURL: "https://api.exchange.coinbase.com",
+		client:  &http.Client{Timeout: 30 * time.Second},
+	}
+
+	if cfg != nil {
+		client.rateLimit = &cfg.RateLimit
+	} else {
+		client.rateLimit = &config.RateLimitConfig{
+			RequestsPerMinute: 300,
+			RetryDelay:        5 * time.Second,
+			MaxRetries:        3,
+		}
+	}
+
+	return client
 }
 
 // Name 返回数据源名称
@@ -41,7 +72,7 @@ func (c *CoinbaseClient) IsSymbolValid(ctx context.Context, symbol string) (bool
 		return false, err
 	}
 
-	resp, err := c.client.Do(req)
+	resp, err := c.executeWithRateLimit(req)
 	if err != nil {
 		return false, err
 	}
@@ -224,7 +255,7 @@ func (c *CoinbaseClient) fetchKlinesBatch(ctx context.Context, coinbaseSymbol st
 
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := c.client.Do(req)
+	resp, err := c.executeWithRateLimit(req)
 	if err != nil {
 		return nil, err
 	}
@@ -348,4 +379,63 @@ func getWeekStart(t time.Time) time.Time {
 	daysFromMonday := weekday - 1
 	// 返回周一的日期（保持时间部分）
 	return t.AddDate(0, 0, -daysFromMonday)
+}
+
+// rateLimitSleep 根据限流配置进行休眠
+func (c *CoinbaseClient) rateLimitSleep() {
+	c.requestMutex.Lock()
+	defer c.requestMutex.Unlock()
+
+	if c.rateLimit.RequestsPerMinute <= 0 {
+		return // 没有限流
+	}
+
+	// 计算每个请求之间的最小间隔
+	minInterval := time.Minute / time.Duration(c.rateLimit.RequestsPerMinute)
+
+	// 计算距离上次请求的时间
+	elapsed := time.Since(c.lastRequest)
+
+	// 如果还没有达到最小间隔，则等待
+	if elapsed < minInterval {
+		sleepTime := minInterval - elapsed
+		time.Sleep(sleepTime)
+	}
+
+	c.lastRequest = time.Now()
+}
+
+// executeWithRateLimit 执行带限流的HTTP请求
+func (c *CoinbaseClient) executeWithRateLimit(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	for attempt := 0; attempt <= c.rateLimit.MaxRetries; attempt++ {
+		// 应用限流
+		c.rateLimitSleep()
+
+		// 执行请求
+		resp, err = c.client.Do(req)
+
+		// 如果成功或者非限流错误，直接返回
+		if err == nil && resp.StatusCode != http.StatusTooManyRequests {
+			return resp, nil
+		}
+
+		// 如果是限流错误，等待更长时间再重试
+		if resp != nil && resp.StatusCode == http.StatusTooManyRequests {
+			if attempt < c.rateLimit.MaxRetries {
+				time.Sleep(c.rateLimit.RetryDelay)
+			}
+			resp.Body.Close()
+			continue
+		}
+
+		// 其他错误，等待重试延迟
+		if attempt < c.rateLimit.MaxRetries {
+			time.Sleep(c.rateLimit.RetryDelay)
+		}
+	}
+
+	return resp, err
 }

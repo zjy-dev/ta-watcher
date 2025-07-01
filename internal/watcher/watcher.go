@@ -415,7 +415,7 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 		// 详细分析
 		if signal.DetailedAnalysis != "" {
 			messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
+				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">💻 技术分析</div>
 				<div style="color: #6c757d; line-height: 1.6;">%s</div>
 			</div>`, signal.DetailedAnalysis))
 		}
@@ -672,13 +672,13 @@ func (w *Watcher) RunSingleCheck(ctx context.Context, symbols []string, timefram
 
 	log.Printf("✅ 单次检查完成 - 成功检查了 %d 个组合", checkCount)
 
-	// 单次检查结束后，强制发送所有累积的信号报告
+	// 单次检查结束后，强制发送报告（无论是否有信号）
 	if len(w.signals) > 0 {
 		log.Printf("📧 单次检查发现 %d 个信号，正在发送报告...", len(w.signals))
-		// log.Printf("邮箱配置: %v", w.emailNotifier.Config().Email)
 		w.sendReport("单次检查完成")
 	} else {
-		log.Printf("📭 单次检查未发现交易信号")
+		log.Printf("📭 单次检查未发现交易信号，发送无信号报告...")
+		w.sendNoSignalReport()
 	}
 
 	return nil

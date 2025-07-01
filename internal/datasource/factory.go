@@ -24,7 +24,7 @@ func (f *Factory) CreateDataSource(sourceType string, cfg *config.Config) (DataS
 		client := NewBinanceClient()
 		return client, nil
 	case "coinbase":
-		client := NewCoinbaseClient()
+		client := NewCoinbaseClientWithConfig(&cfg.DataSource.Coinbase)
 		return client, nil
 	default:
 		log.Printf("❌ 不支持的数据源类型: %s", sourceType)

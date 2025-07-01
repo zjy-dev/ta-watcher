@@ -48,3 +48,5 @@ Thumbs.db
 .env.local
 .env.*.local
 .env.integration
+
+coverage.out

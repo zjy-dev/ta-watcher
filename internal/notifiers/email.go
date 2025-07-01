@@ -4,10 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"log"
 	"net"
 	"net/smtp"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -133,7 +136,7 @@ func (e *EmailNotifier) parseTemplate() error {
         </div>
         <div class="content">
             <div class="message-content">
-                {{.Message}}
+                {{.HTMLMessage}}
             </div>
         </div>
         <div class="footer">
@@ -177,7 +180,7 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 	msg := e.buildMessage(subject, body)
 
 	// 发送邮件
-	addr := fmt.Sprintf("%s:%d", e.config.SMTP.Host, e.config.SMTP.Port)
+	addr := net.JoinHostPort(e.config.SMTP.Host, fmt.Sprintf("%d", e.config.SMTP.Port))
 
 	var sendErr error
 	if e.config.SMTP.TLS {
@@ -193,6 +196,11 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 	// 发送成功，记录日志
 	log.Printf("📧 邮件发送成功: %s -> %v (主题: %s)", e.config.From, e.config.To, subject)
 
+	// 保存HTML预览
+	if err := e.saveHTMLPreview(subject, body); err != nil {
+		log.Printf("⚠️ 保存HTML预览失败: %v", err)
+	}
+
 	return nil
 }
 
@@ -202,9 +210,11 @@ func (e *EmailNotifier) prepareEmail(notification *Notification) (string, string
 	data := struct {
 		*Notification
 		FormattedTime string
+		HTMLMessage   template.HTML // 不会被HTML转义的消息内容
 	}{
 		Notification:  notification,
 		FormattedTime: notification.Timestamp.Format("2006-01-02 15:04:05"),
+		HTMLMessage:   template.HTML(notification.Message), // 将消息转换为template.HTML类型
 	}
 
 	// 渲染邮件内容
@@ -339,7 +349,7 @@ func (e *EmailNotifier) TestConnection() error {
 	}
 
 	// 快速连接测试，不发送实际邮件
-	addr := fmt.Sprintf("%s:%d", e.config.SMTP.Host, e.config.SMTP.Port)
+	addr := net.JoinHostPort(e.config.SMTP.Host, fmt.Sprintf("%d", e.config.SMTP.Port))
 
 	// 建立连接测试，设置10秒超时
 	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
@@ -374,4 +384,49 @@ func (e *EmailNotifier) TestConnection() error {
 	}
 
 	return nil
+}
+
+// saveHTMLPreview 保存HTML预览
+func (e *EmailNotifier) saveHTMLPreview(subject, body string) error {
+	// 创建预览目录
+	dir := "email_previews"
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create preview directory: %w", err)
+	}
+
+	// 生成带时间戳的文件名
+	timestamp := time.Now().Format("20060102_150405")
+	filename := fmt.Sprintf("email_preview_%s_%s.html", timestamp, hashString(subject)[:8])
+
+	// 保存文件
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		return fmt.Errorf("failed to save HTML preview: %w", err)
+	}
+
+	// 同时保存最新的预览文件
+	latestPath := filepath.Join(dir, "latest_email_preview.html")
+	if err := os.WriteFile(latestPath, []byte(body), 0644); err != nil {
+		log.Printf("⚠️ 保存最新预览文件失败: %v", err)
+	}
+
+	log.Printf("📄 HTML预览已保存: %s", path)
+	return nil
+}
+
+// hashString 计算字符串的哈希值
+func hashString(s string) string {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return fmt.Sprintf("%x", h.Sum32())
+}
+
+// PrepareEmailForTesting 为测试暴露的prepareEmail方法
+func (e *EmailNotifier) PrepareEmailForTesting(notification *Notification) (string, string, error) {
+	return e.prepareEmail(notification)
+}
+
+// BuildMessageForTesting 为测试暴露的buildMessage方法
+func (e *EmailNotifier) BuildMessageForTesting(subject, body string) []byte {
+	return e.buildMessage(subject, body)
 }

@@ -19,7 +19,22 @@ type Watcher struct {
 	dataSource      datasource.DataSource
 	strategies      []strategy.Strategy
 	notifierManager *notifiers.Manager
+	emailNotifier   *notifiers.EmailNotifier
 	rateCalculator  *assets.RateCalculator
+	signals         []SignalInfo // 简单存储信号信息
+	lastReportTime  time.Time
+}
+
+// SignalInfo 简单的信号信息结构
+type SignalInfo struct {
+	Symbol     string
+	Timeframe  string
+	Signal     strategy.Signal
+	RSI        float64
+	Price      float64
+	Confidence float64
+	Strategy   string
+	Timestamp  time.Time
 }
 
 // New 创建新的监控器
@@ -40,10 +55,12 @@ func New(cfg *config.Config) (*Watcher, error) {
 
 	// 创建通知管理器
 	notifierManager := notifiers.NewManager()
+	var emailNotifier *notifiers.EmailNotifier
 
 	// 添加邮件通知器
 	if cfg.Notifiers.Email.Enabled {
-		emailNotifier, err := notifiers.NewEmailNotifier(&cfg.Notifiers.Email)
+		log.Printf("🔔 启用邮件通知器: %s", cfg.Notifiers.Email.SMTP.Password)
+		emailNotifier, err = notifiers.NewEmailNotifier(&cfg.Notifiers.Email)
 		if err == nil {
 			if err := notifierManager.AddNotifier(emailNotifier); err == nil {
 				log.Printf("✅ 邮件通知器已启用")
@@ -58,7 +75,10 @@ func New(cfg *config.Config) (*Watcher, error) {
 		dataSource:      ds,
 		strategies:      strategies,
 		notifierManager: notifierManager,
+		emailNotifier:   emailNotifier,
 		rateCalculator:  rateCalculator,
+		signals:         make([]SignalInfo, 0),
+		lastReportTime:  time.Now(),
 	}, nil
 }
 
@@ -67,13 +87,33 @@ func (w *Watcher) Start(ctx context.Context) error {
 	symbols := []string{"BTCUSDT", "ETHUSDT"}
 	timeframes := []datasource.Timeframe{datasource.Timeframe1h, datasource.Timeframe4h}
 
+	// 创建一个带有取消功能的上下文
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	for _, symbol := range symbols {
 		for _, tf := range timeframes {
-			go w.Watch(ctx, symbol, tf)
+			go w.Watch(cancelCtx, symbol, tf)
 		}
 	}
 
+	// 创建定时报告发送器（每10分钟检查一次是否需要发送报告）
+	reportTicker := time.NewTicker(10 * time.Minute)
+	defer reportTicker.Stop()
+
+	go func() {
+		for {
+			select {
+			case <-cancelCtx.Done():
+				return
+			case <-reportTicker.C:
+				w.checkAndSendReport()
+			}
+		}
+	}()
+
 	<-ctx.Done()
+
 	return nil
 }
 
@@ -181,11 +221,11 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 				if result.ShouldNotify() {
 					// 触发信号时
 					log.Printf("🚨 [%s %s] RSI:%.1f %s", symbol, timeframe, rsiValue, result.Signal.String())
-					// 发送邮件通知
+					// 记录信号
 					if rsiVal, ok := rsiValue.(float64); ok {
-						w.sendNotification(symbol, timeframe, strat.Name(), result, rsiVal)
+						w.recordSymbol(symbol, timeframe, strat.Name(), result, rsiVal)
 					} else {
-						w.sendNotification(symbol, timeframe, strat.Name(), result, 0)
+						w.recordSymbol(symbol, timeframe, strat.Name(), result, 0)
 					}
 				} else {
 					// 正常状态
@@ -198,72 +238,238 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 	return nil
 }
 
-// sendNotification 发送通知
-func (w *Watcher) sendNotification(symbol string, timeframe datasource.Timeframe, strategyName string, result *strategy.StrategyResult, rsiValue float64) {
-	if w.notifierManager == nil {
+// recordSymbol 将信号添加到信号列表并检查是否发送报告
+func (w *Watcher) recordSymbol(symbol string, timeframe datasource.Timeframe, strategyName string, result *strategy.StrategyResult, rsiValue float64) {
+	if w.emailNotifier == nil {
 		return
 	}
 
-	// 构建通知数据
-	var level notifiers.NotificationLevel
-	var message string
-	var signalIcon string
-
-	switch result.Signal {
-	case strategy.SignalBuy:
-		level = notifiers.LevelWarning
-		signalIcon = "📈 买入信号"
-	case strategy.SignalSell:
-		level = notifiers.LevelWarning
-		signalIcon = "📉 卖出信号"
-	default:
-		level = notifiers.LevelInfo
-		signalIcon = "ℹ️ 信息"
+	// 获取当前价格（从策略结果的指标中获取，如果有的话）
+	var price float64
+	if closePrice, exists := result.Indicators["close"]; exists {
+		if p, ok := closePrice.(float64); ok {
+			price = p
+		}
 	}
 
-	// 构建详细消息
-	if rsiValue > 0 {
-		message = fmt.Sprintf("%s\n\n交易对: %s\n时间框架: %s\n策略: %s\nRSI值: %.1f\n信号类型: %s\n置信度: %.1f%%",
-			signalIcon, symbol, timeframe, strategyName, rsiValue, result.Signal.String(), result.Confidence*100)
+	// 添加信号到简单列表
+	signal := SignalInfo{
+		Symbol:     symbol,
+		Timeframe:  string(timeframe),
+		Signal:     result.Signal,
+		RSI:        rsiValue,
+		Price:      price,
+		Confidence: result.Confidence,
+		Strategy:   strategyName,
+		Timestamp:  time.Now(),
+	}
+	w.signals = append(w.signals, signal)
+
+	log.Printf("📊 信号已记录: %s %s 信号 (置信度: %.1f%%)",
+		symbol, result.Signal.String(), result.Confidence*100)
+}
+
+// checkAndSendReport 检查并发送报告
+func (w *Watcher) checkAndSendReport() {
+	if w.emailNotifier == nil {
+		return
+	}
+
+	// 发送条件：有信号且距离上次报告超过1分钟，或者信号数量达到3个
+	now := time.Now()
+	timeSinceLastReport := now.Sub(w.lastReportTime)
+	signalCount := len(w.signals)
+
+	shouldSend := false
+	reason := ""
+
+	if signalCount >= 3 {
+		shouldSend = true
+		reason = "信号数量达到3个"
+	} else if signalCount > 0 && timeSinceLastReport >= 1*time.Minute {
+		shouldSend = true
+		reason = "距离上次报告超过1分钟"
+	}
+
+	if shouldSend {
+		w.sendReport(reason)
+	}
+}
+
+// sendReport 发送报告
+func (w *Watcher) sendReport(reason string) {
+	if w.emailNotifier == nil {
+		return
+	}
+
+	if len(w.signals) == 0 {
+		return
+	}
+
+	// 创建交易报告通知
+	notification := w.createTradingReportNotification(reason)
+
+	// 发送通知
+	if err := w.emailNotifier.Send(notification); err != nil {
+		log.Printf("❌ 发送交易报告失败: %v", err)
 	} else {
-		message = fmt.Sprintf("%s\n\n交易对: %s\n时间框架: %s\n策略: %s\n信号类型: %s\n置信度: %.1f%%",
-			signalIcon, symbol, timeframe, strategyName, result.Signal.String(), result.Confidence*100)
+		log.Printf("📧 交易报告已发送: %d个信号 (%s)",
+			len(w.signals), reason)
 	}
 
-	// 构建数据字典
-	data := map[string]interface{}{
-		"Symbol":     symbol,
-		"Timeframe":  string(timeframe),
-		"Strategy":   strategyName,
-		"Signal":     result.Signal.String(),
-		"Confidence": fmt.Sprintf("%.1f%%", result.Confidence*100),
+	// 重置信号列表和更新时间
+	w.signals = make([]SignalInfo, 0)
+	w.lastReportTime = time.Now()
+}
+
+// createTradingReportNotification 创建交易报告通知
+func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Notification {
+	// 统计信号
+	buySignals := 0
+	sellSignals := 0
+	for _, signal := range w.signals {
+		switch signal.Signal {
+		case strategy.SignalBuy:
+			buySignals++
+		case strategy.SignalSell:
+			sellSignals++
+		}
 	}
 
-	if rsiValue > 0 {
-		data["RSI"] = fmt.Sprintf("%.1f", rsiValue)
+	// 生成通知标题
+	title := fmt.Sprintf("TA Watcher 交易报告 - %d个信号", len(w.signals))
+
+	// 生成通知消息
+	message := fmt.Sprintf(`🚀 TA Watcher 交易分析报告
+
+📊 报告摘要:
+• 总信号数: %d
+• 买入信号: %d  
+• 卖出信号: %d
+• 生成时间: %s
+• 触发原因: %s
+
+📈 信号详情:`,
+		len(w.signals),
+		buySignals,
+		sellSignals,
+		time.Now().Format("2006-01-02 15:04:05"),
+		reason)
+
+	// 添加信号详情
+	for i, signal := range w.signals {
+		if i >= 10 { // 限制显示前10个信号
+			message += fmt.Sprintf("\n... 还有 %d 个信号", len(w.signals)-10)
+			break
+		}
+
+		message += fmt.Sprintf(`
+%d. %s (%s) - %s
+   • RSI: %.1f
+   • 价格: %.6f  
+   • 置信度: %.1f%%
+   • 策略: %s
+   • 时间: %s`,
+			i+1,
+			signal.Symbol,
+			signal.Timeframe,
+			signal.Signal.String(),
+			signal.RSI,
+			signal.Price,
+			signal.Confidence*100,
+			signal.Strategy,
+			signal.Timestamp.Format("15:04:05"))
 	}
 
-	// 添加所有指标数据
-	for key, value := range result.Indicators {
-		data[key] = fmt.Sprintf("%.2f", value)
-	}
+	message += `
 
-	notification := &notifiers.Notification{
-		Level:     level,
+⚠️ 免责声明: 本报告仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+
+---
+🤖 此报告由 TA Watcher v1.0.0 自动生成`
+
+	// 创建附加数据
+	data := make(map[string]interface{})
+	data["total_signals"] = len(w.signals)
+	data["buy_signals"] = buySignals
+	data["sell_signals"] = sellSignals
+	data["generated_at"] = time.Now()
+	data["reason"] = reason
+
+	// 添加信号数据
+	signalData := make([]map[string]interface{}, len(w.signals))
+	for i, signal := range w.signals {
+		signalData[i] = map[string]interface{}{
+			"symbol":     signal.Symbol,
+			"timeframe":  signal.Timeframe,
+			"signal":     signal.Signal.String(),
+			"rsi":        signal.RSI,
+			"price":      signal.Price,
+			"confidence": signal.Confidence,
+			"strategy":   signal.Strategy,
+			"timestamp":  signal.Timestamp,
+		}
+	}
+	data["signals"] = signalData
+
+	return &notifiers.Notification{
+		ID:        fmt.Sprintf("trading-report-%d", time.Now().Unix()),
 		Type:      notifiers.TypeStrategySignal,
-		Asset:     symbol,
-		Strategy:  strategyName,
-		Title:     fmt.Sprintf("TA Watcher - %s %s 信号", symbol, result.Signal.String()),
+		Level:     notifiers.LevelWarning,
+		Title:     title,
 		Message:   message,
 		Data:      data,
 		Timestamp: time.Now(),
 	}
+}
 
-	// 发送通知
-	if err := w.notifierManager.Send(notification); err != nil {
-		log.Printf("❌ 发送通知失败: %v", err)
+// sendNoSignalReport 发送无信号报告
+func (w *Watcher) sendNoSignalReport() {
+	if w.emailNotifier == nil {
+		return
+	}
+
+	// 创建无信号通知
+	notification := &notifiers.Notification{
+		ID:    fmt.Sprintf("no-signal-report-%d", time.Now().Unix()),
+		Type:  notifiers.TypeSystemAlert,
+		Level: notifiers.LevelInfo,
+		Title: "TA Watcher 分析报告 - 未发现交易信号",
+		Message: `🔍 TA Watcher 市场分析完成
+
+📊 分析摘要:
+• 交易信号: 0 个
+• 分析时间: ` + time.Now().Format("2006-01-02 15:04:05") + `
+• 分析状态: 完成
+
+💡 市场状况:
+市场分析已完成，当前市场处于观望状态，未发现明显的交易机会。
+建议继续关注市场动态，等待更好的交易时机。
+
+📈 技术分析:
+• RSI 指标: 在正常范围内波动
+• 市场趋势: 相对稳定
+• 交易建议: 保持观望
+
+⚠️ 免责声明: 
+本报告仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+
+---
+🤖 此报告由 TA Watcher v1.0.0 自动生成`,
+		Data: map[string]interface{}{
+			"total_signals":  0,
+			"analysis_time":  time.Now(),
+			"market_status":  "stable",
+			"recommendation": "hold",
+		},
+		Timestamp: time.Now(),
+	}
+
+	// 发送报告
+	if err := w.emailNotifier.Send(notification); err != nil {
+		log.Printf("❌ 发送无信号报告失败: %v", err)
 	} else {
-		log.Printf("📧 通知已发送: %s %s 信号", symbol, result.Signal.String())
+		log.Printf("📧 无信号分析报告已发送")
 	}
 }
 
@@ -298,6 +504,16 @@ func (w *Watcher) RunSingleCheck(ctx context.Context, symbols []string, timefram
 	}
 
 	log.Printf("✅ 单次检查完成 - 成功检查了 %d 个组合", checkCount)
+
+	// 单次检查结束后，强制发送所有累积的信号报告
+	if len(w.signals) > 0 {
+		log.Printf("📧 单次检查发现 %d 个信号，正在发送报告...", len(w.signals))
+		// log.Printf("邮箱配置: %v", w.emailNotifier.Config().Email)
+		w.sendReport("单次检查完成")
+	} else {
+		log.Printf("📭 单次检查未发现交易信号")
+	}
+
 	return nil
 }
 

@@ -65,8 +65,8 @@ notifiers:
 # 监控资产配置
 assets:
   symbols:                          # 要监控的加密货币列表
-    # - "BTC"                         # 比特币
-    # - "ETH"                         # 以太坊
+    - "BTC"                         # 比特币
+    - "ETH"                         # 以太坊
     # - "BNB"                         # 币安币
     - "ADA"                         # 卡尔达诺
     - "SOL"                         # Solana

@@ -214,6 +214,9 @@ func runSingleCheck(ctx context.Context, w *watcher.Watcher, cfg *config.Config)
 		return fmt.Errorf("策略分析失败: %w", err)
 	}
 
+	// 5. 等待一点时间确保所有信号都被处理
+	time.Sleep(3 * time.Second)
+
 	log.Println("=== 单次检查完成 ===")
 	return nil
 }

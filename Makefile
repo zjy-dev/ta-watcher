@@ -359,12 +359,6 @@ build-cloud: ## 构建云优化版本
 	@docker build -f Dockerfile.cloud -t ta-watcher-cloud:latest .
 	@echo "$(COLOR_GREEN)✅ 云版本构建完成！$(COLOR_RESET)"
 
-.PHONY: test-single-run
-test-single-run: build ## 测试单次运行模式
-	@echo "$(COLOR_BOLD)🎯 测试单次运行模式...$(COLOR_RESET)"
-	@./bin/$(BINARY_NAME) --single-run --config config.yaml
-	@echo "$(COLOR_GREEN)✅ 单次运行测试完成！$(COLOR_RESET)"
-
 .PHONY: docker-test-single-run
 docker-test-single-run: build-cloud ## Docker 测试单次运行模式
 	@echo "$(COLOR_BOLD)🐳 Docker 单次运行测试...$(COLOR_RESET)"

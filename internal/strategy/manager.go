@@ -139,7 +139,7 @@ func (s *EvaluationSummary) GetStrongestSignal() *EvaluationResult {
 	for _, result := range s.NotificationResults[1:] {
 		if result.Result.Strength > strongest.Result.Strength ||
 			(result.Result.Strength == strongest.Result.Strength &&
-				result.Result.Confidence > strongest.Result.Confidence) {
+				result.Result.Timestamp.After(strongest.Result.Timestamp)) {
 			strongest = result
 		}
 	}

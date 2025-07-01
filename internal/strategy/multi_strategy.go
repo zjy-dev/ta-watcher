@@ -116,8 +116,8 @@ func (s *MultiStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 			continue
 		}
 
-		allResults = append(allResults, fmt.Sprintf("%s: %s(%.2f)",
-			name, result.Signal.String(), result.Confidence))
+		allResults = append(allResults, fmt.Sprintf("%s: %s",
+			name, result.Signal.String()))
 
 		// 只有买入/卖出信号才算触发（忽略Hold和None）
 		if result.Signal == SignalBuy || result.Signal == SignalSell {
@@ -128,52 +128,79 @@ func (s *MultiStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 	// 如果没有任何策略触发，返回无信号
 	if len(triggeredResults) == 0 {
 		return &StrategyResult{
-			Signal:     SignalNone,
-			Strength:   StrengthWeak,
-			Confidence: 0.0,
-			Price:      getCurrentPrice(data),
-			Timestamp:  time.Now(),
-			Message:    fmt.Sprintf("组合策略 %s: 无触发信号", s.name),
+			Signal:           SignalNone,
+			Strength:         StrengthWeak,
+			Timestamp:        time.Now(),
+			Message:          fmt.Sprintf("组合策略 %s: 无触发信号", s.name),
+			IndicatorSummary: fmt.Sprintf("组合策略(%d个子策略): 无信号", len(s.subStrategies)),
+			DetailedAnalysis: fmt.Sprintf("组合策略 %s 包含 %d 个子策略，当前无任何策略触发买入或卖出信号。", s.name, len(s.subStrategies)),
+			Indicators:       map[string]interface{}{"price": getCurrentPrice(data)},
+			Thresholds:       map[string]interface{}{},
 			Metadata: map[string]interface{}{
 				"sub_results":      allResults,
 				"triggered_count":  0,
 				"total_strategies": len(s.subStrategies),
 			},
-			Indicators: make(map[string]interface{}),
 		}, nil
 	}
 
-	// 选择置信度最高的信号作为代表（用于通知的具体信息）
+	// 选择信号强度最高的信号作为代表
 	bestResult := triggeredResults[0]
 	for _, result := range triggeredResults[1:] {
-		if result.Confidence > bestResult.Confidence {
+		if result.Strength > bestResult.Strength ||
+			(result.Strength == bestResult.Strength &&
+				result.Timestamp.After(bestResult.Timestamp)) {
 			bestResult = result
 		}
 	}
 
 	// 构造组合结果
 	return &StrategyResult{
-		Signal:     bestResult.Signal,
-		Strength:   bestResult.Strength,
-		Confidence: bestResult.Confidence,
-		Price:      bestResult.Price,
-		Timestamp:  time.Now(),
-		Message:    s.formatNotificationMessage(triggeredResults),
+		Signal:           bestResult.Signal,
+		Strength:         bestResult.Strength,
+		Timestamp:        time.Now(),
+		Message:          s.formatNotificationMessage(triggeredResults),
+		IndicatorSummary: fmt.Sprintf("组合策略(%d个子策略): %d个触发", len(s.subStrategies), len(triggeredResults)),
+		DetailedAnalysis: s.formatDetailedAnalysis(triggeredResults, allResults),
+		Indicators:       bestResult.Indicators,
+		Thresholds:       bestResult.Thresholds,
 		Metadata: map[string]interface{}{
 			"sub_results":          allResults,
 			"triggered_count":      len(triggeredResults),
 			"total_strategies":     len(s.subStrategies),
 			"triggered_strategies": s.getTriggeredNames(triggeredResults),
 		},
-		Indicators: bestResult.Indicators,
 	}, nil
+}
+
+// formatDetailedAnalysis 格式化详细分析
+func (s *MultiStrategy) formatDetailedAnalysis(triggered []*StrategyResult, allResults []string) string {
+	analysis := fmt.Sprintf("组合策略 %s 包含 %d 个子策略，其中 %d 个触发了信号:\n",
+		s.name, len(s.subStrategies), len(triggered))
+
+	for i, result := range triggered {
+		analysis += fmt.Sprintf("  %d. %s: %s\n", i+1,
+			s.getStrategyNameForResult(result), result.Message)
+	}
+
+	if len(triggered) > 1 {
+		analysis += fmt.Sprintf("\n选择了信号强度最高的策略作为组合信号。")
+	}
+
+	return analysis
+}
+
+// getStrategyNameForResult 获取结果对应的策略名称
+func (s *MultiStrategy) getStrategyNameForResult(result *StrategyResult) string {
+	// 这里需要根据实际情况实现，暂时返回通用名称
+	return "子策略"
 }
 
 // formatNotificationMessage 格式化通知消息
 func (s *MultiStrategy) formatNotificationMessage(triggered []*StrategyResult) string {
 	if len(triggered) == 1 {
-		return fmt.Sprintf("组合策略 %s: %s信号 (置信度%.2f)",
-			s.name, triggered[0].Signal.String(), triggered[0].Confidence)
+		return fmt.Sprintf("🔄 组合策略 %s: %s信号",
+			s.name, triggered[0].Signal.String())
 	}
 
 	return fmt.Sprintf("组合策略 %s: 检测到%d个信号触发", s.name, len(triggered))

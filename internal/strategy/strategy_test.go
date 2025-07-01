@@ -57,7 +57,7 @@ func TestRSIStrategy(t *testing.T) {
 
 		// 应该产生买入信号（超卖）
 		assert.Equal(t, SignalBuy, result.Signal)
-		assert.Greater(t, result.Confidence, 0.0)
+		assert.NotEmpty(t, result.IndicatorSummary)
 		assert.Contains(t, result.Message, "超卖")
 	})
 
@@ -97,8 +97,8 @@ func TestMACrossStrategy(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, result)
 
-		// 可能产生买入信号（金叉）或持有信号
-		assert.True(t, result.Signal == SignalBuy || result.Signal == SignalHold)
+		// 可能产生买入信号（金叉）或无信号
+		assert.True(t, result.Signal == SignalBuy || result.Signal == SignalNone)
 		if result.Signal == SignalBuy {
 			assert.Contains(t, result.Message, "金叉")
 		}

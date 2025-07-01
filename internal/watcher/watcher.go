@@ -27,14 +27,16 @@ type Watcher struct {
 
 // SignalInfo 简单的信号信息结构
 type SignalInfo struct {
-	Symbol     string
-	Timeframe  string
-	Signal     strategy.Signal
-	RSI        float64
-	Price      float64
-	Confidence float64
-	Strategy   string
-	Timestamp  time.Time
+	Symbol           string
+	Timeframe        string
+	Signal           strategy.Signal
+	Strategy         string
+	Timestamp        time.Time
+	Message          string                 // 策略提供的简短消息
+	IndicatorSummary string                 // 指标摘要
+	DetailedAnalysis string                 // 详细分析
+	AllIndicators    map[string]interface{} // 所有指标值
+	Thresholds       map[string]interface{} // 策略阈值
 }
 
 // New 创建新的监控器
@@ -216,20 +218,16 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 		}
 
 		if result != nil {
-			// 只显示RSI结果和信号
-			if rsiValue, exists := result.Indicators["rsi"]; exists {
-				if result.ShouldNotify() {
-					// 触发信号时
-					log.Printf("🚨 [%s %s] RSI:%.1f %s", symbol, timeframe, rsiValue, result.Signal.String())
-					// 记录信号
-					if rsiVal, ok := rsiValue.(float64); ok {
-						w.recordSymbol(symbol, timeframe, strat.Name(), result, rsiVal)
-					} else {
-						w.recordSymbol(symbol, timeframe, strat.Name(), result, 0)
-					}
-				} else {
-					// 正常状态
-					log.Printf("📗 [%s %s] RSI:%.1f", symbol, timeframe, rsiValue)
+			// 使用策略提供的信息，而不是硬编码RSI
+			if result.ShouldNotify() {
+				// 触发信号时，使用策略提供的消息
+				log.Printf("🚨 [%s %s] %s", symbol, timeframe, result.Message)
+				// 记录信号
+				w.recordSignal(symbol, timeframe, strat.Name(), result)
+			} else {
+				// 正常状态，显示简化信息
+				if len(result.Message) > 0 {
+					log.Printf("📗 [%s %s] %s", symbol, timeframe, result.Message)
 				}
 			}
 		}
@@ -238,35 +236,29 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 	return nil
 }
 
-// recordSymbol 将信号添加到信号列表并检查是否发送报告
-func (w *Watcher) recordSymbol(symbol string, timeframe datasource.Timeframe, strategyName string, result *strategy.StrategyResult, rsiValue float64) {
+// recordSignal 将信号添加到信号列表并检查是否发送报告
+func (w *Watcher) recordSignal(symbol string, timeframe datasource.Timeframe, strategyName string, result *strategy.StrategyResult) {
 	if w.emailNotifier == nil {
 		return
 	}
 
-	// 获取当前价格（从策略结果的指标中获取，如果有的话）
-	var price float64
-	if closePrice, exists := result.Indicators["close"]; exists {
-		if p, ok := closePrice.(float64); ok {
-			price = p
-		}
-	}
-
 	// 添加信号到简单列表
 	signal := SignalInfo{
-		Symbol:     symbol,
-		Timeframe:  string(timeframe),
-		Signal:     result.Signal,
-		RSI:        rsiValue,
-		Price:      price,
-		Confidence: result.Confidence,
-		Strategy:   strategyName,
-		Timestamp:  time.Now(),
+		Symbol:           symbol,
+		Timeframe:        string(timeframe),
+		Signal:           result.Signal,
+		Strategy:         strategyName,
+		Timestamp:        time.Now(),
+		Message:          result.Message,
+		IndicatorSummary: result.IndicatorSummary,
+		DetailedAnalysis: result.DetailedAnalysis,
+		AllIndicators:    result.Indicators,
+		Thresholds:       result.Thresholds,
 	}
 	w.signals = append(w.signals, signal)
 
-	log.Printf("📊 信号已记录: %s %s 信号 (置信度: %.1f%%)",
-		symbol, result.Signal.String(), result.Confidence*100)
+	log.Printf("📊 信号已记录: %s %s 信号 - %s",
+		symbol, result.Signal.String(), result.IndicatorSummary)
 }
 
 // checkAndSendReport 检查并发送报告
@@ -365,18 +357,16 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 
 		message += fmt.Sprintf(`
 %d. %s (%s) - %s
-   • RSI: %.1f
-   • 价格: %.6f  
-   • 置信度: %.1f%%
+   • %s
+   • 详细分析: %s
    • 策略: %s
    • 时间: %s`,
 			i+1,
 			signal.Symbol,
 			signal.Timeframe,
 			signal.Signal.String(),
-			signal.RSI,
-			signal.Price,
-			signal.Confidence*100,
+			signal.IndicatorSummary,
+			signal.DetailedAnalysis,
 			signal.Strategy,
 			signal.Timestamp.Format("15:04:05"))
 	}
@@ -400,14 +390,16 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 	signalData := make([]map[string]interface{}, len(w.signals))
 	for i, signal := range w.signals {
 		signalData[i] = map[string]interface{}{
-			"symbol":     signal.Symbol,
-			"timeframe":  signal.Timeframe,
-			"signal":     signal.Signal.String(),
-			"rsi":        signal.RSI,
-			"price":      signal.Price,
-			"confidence": signal.Confidence,
-			"strategy":   signal.Strategy,
-			"timestamp":  signal.Timestamp,
+			"symbol":            signal.Symbol,
+			"timeframe":         signal.Timeframe,
+			"signal":            signal.Signal.String(),
+			"message":           signal.Message,
+			"indicator_summary": signal.IndicatorSummary,
+			"detailed_analysis": signal.DetailedAnalysis,
+			"strategy":          signal.Strategy,
+			"timestamp":         signal.Timestamp,
+			"indicators":        signal.AllIndicators,
+			"thresholds":        signal.Thresholds,
 		}
 	}
 	data["signals"] = signalData
@@ -447,7 +439,7 @@ func (w *Watcher) sendNoSignalReport() {
 建议继续关注市场动态，等待更好的交易时机。
 
 📈 技术分析:
-• RSI 指标: 在正常范围内波动
+• 各项指标: 在正常范围内波动
 • 市场趋势: 相对稳定
 • 交易建议: 保持观望
 

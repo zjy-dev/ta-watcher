@@ -63,14 +63,15 @@ type MarketData struct {
 
 // StrategyResult 策略评估结果
 type StrategyResult struct {
-	Signal     Signal                 // 信号类型
-	Strength   Strength               // 信号强度
-	Confidence float64                // 置信度 (0.0-1.0)
-	Price      float64                // 触发价格
-	Timestamp  time.Time              // 信号时间
-	Message    string                 // 信号描述
-	Metadata   map[string]interface{} // 额外元数据
-	Indicators map[string]interface{} // 指标值
+	Signal           Signal                 // 信号类型
+	Strength         Strength               // 信号强度
+	Timestamp        time.Time              // 信号时间
+	Message          string                 // 信号描述消息
+	IndicatorSummary string                 // 指标摘要描述（包含指标名称、阈值、当前值）
+	DetailedAnalysis string                 // 详细分析描述
+	Indicators       map[string]interface{} // 指标原始值
+	Thresholds       map[string]interface{} // 策略阈值
+	Metadata         map[string]interface{} // 额外元数据
 }
 
 // ShouldNotify 判断是否应该发送通知

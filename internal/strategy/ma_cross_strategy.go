@@ -72,7 +72,8 @@ func (s *MACrossStrategy) Description() string {
 		typeName = "简单移动平均线"
 	}
 
-	return fmt.Sprintf("%s交叉策略 (快线:%d, 慢线:%d)", typeName, s.fastPeriod, s.slowPeriod)
+	return fmt.Sprintf("%s交叉策略\n• 快线: %s-%d\n• 慢线: %s-%d\n• 说明: 快线上穿慢线生成买入信号，快线下穿慢线生成卖出信号",
+		typeName, typeName, s.fastPeriod, typeName, s.slowPeriod)
 }
 
 // RequiredDataPoints 返回所需数据点
@@ -139,21 +140,22 @@ func (s *MACrossStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 
 	// 初始化结果
 	result := &StrategyResult{
-		Signal:     SignalNone,
-		Strength:   StrengthNormal,
-		Confidence: 0.0,
-		Price:      currentPrice,
-		Timestamp:  time.Now(),
-		Metadata:   make(map[string]interface{}),
-		Indicators: make(map[string]interface{}),
+		Signal:    SignalNone,
+		Strength:  StrengthNormal,
+		Timestamp: time.Now(),
+		Metadata:  make(map[string]interface{}),
+		Indicators: map[string]interface{}{
+			"fast_ma":     fastCurrent,
+			"slow_ma":     slowCurrent,
+			"fast_period": s.fastPeriod,
+			"slow_period": s.slowPeriod,
+			"ma_type":     s.maType,
+			"price":       currentPrice,
+		},
+		Thresholds: map[string]interface{}{
+			"cross_threshold": 0.0, // 交叉阈值为0
+		},
 	}
-
-	// 设置指标值
-	result.Indicators["fast_ma"] = fastCurrent
-	result.Indicators["slow_ma"] = slowCurrent
-	result.Indicators["fast_period"] = s.fastPeriod
-	result.Indicators["slow_period"] = s.slowPeriod
-	result.Indicators["ma_type"] = s.maType
 
 	// 计算差值和差值变化
 	currentDiff := fastCurrent - slowCurrent
@@ -162,90 +164,97 @@ func (s *MACrossStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 
 	result.Metadata["ma_diff"] = currentDiff
 	result.Metadata["ma_diff_change"] = diffChange
+	result.Metadata["ma_diff_percent"] = (currentDiff / slowCurrent) * 100
 
-	// 检测交叉
-	var signal Signal
-	var message string
-	confidence := 0.0
+	// 生成指标摘要
+	var maTypeName string
+	switch s.maType {
+	case indicators.EMA:
+		maTypeName = "EMA"
+	case indicators.WMA:
+		maTypeName = "WMA"
+	default:
+		maTypeName = "SMA"
+	}
+	result.IndicatorSummary = fmt.Sprintf("%s交叉: 快线(%d)=%.2f, 慢线(%d)=%.2f",
+		maTypeName, s.fastPeriod, fastCurrent, s.slowPeriod, slowCurrent)
 
+	// 检测交叉并生成信号
 	if previousDiff <= 0 && currentDiff > 0 {
 		// 黄金交叉：快线上穿慢线，买入信号
-		signal = SignalBuy
-		message = fmt.Sprintf("黄金交叉: 快线(%.2f)上穿慢线(%.2f)", fastCurrent, slowCurrent)
-		confidence = calculateCrossConfidence(currentDiff, slowCurrent, true)
+		result.Signal = SignalBuy
+		result.Message = "🟢 黄金交叉信号"
+		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 上穿慢线 %.2f，形成黄金交叉。这通常预示着上升趋势的开始，建议考虑买入。当前价格差异为 %.2f%%。",
+			fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
+
+		// 判断信号强度
+		diffPercent := (currentDiff / slowCurrent) * 100
+		if diffPercent > 2.0 {
+			result.Strength = StrengthStrong
+			result.DetailedAnalysis += " 📈 价格差异较大，信号强度: 强"
+		} else if diffPercent > 1.0 {
+			result.Strength = StrengthNormal
+			result.DetailedAnalysis += " 📊 价格差异适中，信号强度: 中等"
+		} else {
+			result.Strength = StrengthWeak
+			result.DetailedAnalysis += " 📉 价格差异较小，信号强度: 弱"
+		}
 
 	} else if previousDiff >= 0 && currentDiff < 0 {
 		// 死亡交叉：快线下穿慢线，卖出信号
-		signal = SignalSell
-		message = fmt.Sprintf("死亡交叉: 快线(%.2f)下穿慢线(%.2f)", fastCurrent, slowCurrent)
-		confidence = calculateCrossConfidence(currentDiff, slowCurrent, false)
+		result.Signal = SignalSell
+		result.Message = "🔴 死亡交叉信号"
+		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 下穿慢线 %.2f，形成死亡交叉。这通常预示着下降趋势的开始，建议考虑卖出。当前价格差异为 %.2f%%。",
+			fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 
-	} else if currentDiff > 0 {
-		// 快线在慢线上方，持有
-		signal = SignalHold
-		message = fmt.Sprintf("多头趋势: 快线(%.2f)高于慢线(%.2f)", fastCurrent, slowCurrent)
-		confidence = 0.3
-
-	} else if currentDiff < 0 {
-		// 快线在慢线下方，空头
-		signal = SignalHold
-		message = fmt.Sprintf("空头趋势: 快线(%.2f)低于慢线(%.2f)", fastCurrent, slowCurrent)
-		confidence = 0.3
-
-	} else {
-		// 平行状态
-		signal = SignalNone
-		message = fmt.Sprintf("平行状态: 快线(%.2f)与慢线(%.2f)接近", fastCurrent, slowCurrent)
-		confidence = 0.0
-	}
-
-	result.Signal = signal
-	result.Message = message
-	result.Confidence = confidence
-
-	// 计算强度
-	if signal == SignalBuy || signal == SignalSell {
-		diffPercent := absFloat64(currentDiff) / slowCurrent * 100
-		if diffPercent >= 2.0 {
+		// 判断信号强度
+		diffPercent := (currentDiff / slowCurrent) * 100
+		if diffPercent < -2.0 {
 			result.Strength = StrengthStrong
-		} else if diffPercent >= 1.0 {
+			result.DetailedAnalysis += " 📈 价格差异较大，信号强度: 强"
+		} else if diffPercent < -1.0 {
 			result.Strength = StrengthNormal
+			result.DetailedAnalysis += " 📊 价格差异适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
+			result.DetailedAnalysis += " 📉 价格差异较小，信号强度: 弱"
 		}
 
-		// 考虑价格趋势一致性
-		priceChange := ctx.PriceChange(s.fastPeriod)
-		if (signal == SignalBuy && priceChange > 0) || (signal == SignalSell && priceChange < 0) {
-			result.Confidence = minFloat64(result.Confidence*1.2, 1.0)
+	} else {
+		// 无交叉信号
+		result.Signal = SignalNone
+		result.Message = "⚪ 无交叉信号"
+		if currentDiff > 0 {
+			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之上，但未发生交叉。当前处于多头排列，价格差异为 %.2f%%。",
+				fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
+		} else {
+			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之下，但未发生交叉。当前处于空头排列，价格差异为 %.2f%%。",
+				fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 		}
+	}
+
+	// 添加趋势信息
+	if len(fastMA.Values) >= 3 && len(slowMA.Values) >= 3 {
+		// 计算趋势强度
+		fastTrend := fastMA.Values[len(fastMA.Values)-1] - fastMA.Values[len(fastMA.Values)-3]
+		slowTrend := slowMA.Values[len(slowMA.Values)-1] - slowMA.Values[len(slowMA.Values)-3]
+
+		result.Metadata["fast_trend"] = fastTrend
+		result.Metadata["slow_trend"] = slowTrend
+
+		// 添加趋势描述
+		trendDesc := ""
+		if fastTrend > 0 && slowTrend > 0 {
+			trendDesc = " 📈 双线均呈上升趋势"
+		} else if fastTrend < 0 && slowTrend < 0 {
+			trendDesc = " 📉 双线均呈下降趋势"
+		} else {
+			trendDesc = " ➡️ 趋势方向分歧"
+		}
+		result.DetailedAnalysis += trendDesc
 	}
 
 	return result, nil
-}
-
-// calculateCrossConfidence 计算交叉置信度
-func calculateCrossConfidence(diff, slowMA float64, isBullish bool) float64 {
-	// 基于差值相对于慢线的百分比计算置信度
-	diffPercent := absFloat64(diff) / slowMA * 100
-
-	// 差值越大，置信度越高
-	confidence := minFloat64(diffPercent/5.0, 1.0) // 5%差值对应满置信度
-
-	// 最小置信度
-	if confidence < 0.5 {
-		confidence = 0.5
-	}
-
-	return confidence
-}
-
-// absFloat64 返回绝对值
-func absFloat64(x float64) float64 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }
 
 // minInt 返回两个整数中较小的

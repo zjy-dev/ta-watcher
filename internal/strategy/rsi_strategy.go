@@ -49,8 +49,8 @@ func (s *RSIStrategy) Name() string {
 
 // Description 返回策略描述
 func (s *RSIStrategy) Description() string {
-	return fmt.Sprintf("RSI相对强弱指标策略 (周期:%d, 超买:%.0f, 超卖:%.0f)",
-		s.period, s.overboughtLevel, s.oversoldLevel)
+	return fmt.Sprintf("RSI相对强弱指标策略\n• 指标: RSI-%d\n• 超买阈值: %.0f\n• 超卖阈值: %.0f\n• 说明: RSI > %.0f 为超买区域(卖出信号), RSI < %.0f 为超卖区域(买入信号)",
+		s.period, s.overboughtLevel, s.oversoldLevel, s.overboughtLevel, s.oversoldLevel)
 }
 
 // RequiredDataPoints 返回所需数据点
@@ -86,57 +86,70 @@ func (s *RSIStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 
 	// 初始化结果
 	result := &StrategyResult{
-		Signal:     SignalNone,
-		Strength:   StrengthNormal,
-		Confidence: 0.0,
-		Price:      currentPrice,
-		Timestamp:  time.Now(),
-		Metadata:   make(map[string]interface{}),
-		Indicators: make(map[string]interface{}),
+		Signal:    SignalNone,
+		Strength:  StrengthNormal,
+		Timestamp: time.Now(),
+		Metadata:  make(map[string]interface{}),
+		Indicators: map[string]interface{}{
+			"rsi":        latestRSI,
+			"rsi_period": s.period,
+			"price":      currentPrice,
+		},
+		Thresholds: map[string]interface{}{
+			"overbought_level": s.overboughtLevel,
+			"oversold_level":   s.oversoldLevel,
+		},
 	}
 
-	// 设置指标值
-	result.Indicators["rsi"] = latestRSI
-	result.Indicators["rsi_period"] = s.period
-	result.Metadata["overbought_level"] = s.overboughtLevel
-	result.Metadata["oversold_level"] = s.oversoldLevel
+	// 生成指标摘要
+	result.IndicatorSummary = fmt.Sprintf("RSI-%d: %.1f (超买>%.0f, 超卖<%.0f)",
+		s.period, latestRSI, s.overboughtLevel, s.oversoldLevel)
 
-	// 判断信号
+	// 判断信号并生成描述
 	if latestRSI >= s.overboughtLevel {
 		// 超买，卖出信号
 		result.Signal = SignalSell
-		result.Confidence = calculateRSIConfidence(latestRSI, s.overboughtLevel, true)
-		result.Message = fmt.Sprintf("RSI超买信号: %.2f >= %.0f", latestRSI, s.overboughtLevel)
+		result.Message = fmt.Sprintf("🔴 RSI超买信号")
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已达到超买阈值 %.0f 以上，市场可能出现回调。RSI指标显示当前价格已被高估。",
+			latestRSI, s.overboughtLevel)
 
 		// 判断强度
 		if latestRSI >= s.overboughtLevel+10 {
 			result.Strength = StrengthStrong
+			result.DetailedAnalysis += " 📈 超买程度较为严重，信号强度: 强"
 		} else if latestRSI >= s.overboughtLevel+5 {
 			result.Strength = StrengthNormal
+			result.DetailedAnalysis += " 📊 超买程度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
+			result.DetailedAnalysis += " 📉 刚进入超买区域，信号强度: 弱"
 		}
 
 	} else if latestRSI <= s.oversoldLevel {
 		// 超卖，买入信号
 		result.Signal = SignalBuy
-		result.Confidence = calculateRSIConfidence(latestRSI, s.oversoldLevel, false)
-		result.Message = fmt.Sprintf("RSI超卖信号: %.2f <= %.0f", latestRSI, s.oversoldLevel)
+		result.Message = fmt.Sprintf("🟢 RSI超卖信号")
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已降至超卖阈值 %.0f 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。",
+			latestRSI, s.oversoldLevel)
 
 		// 判断强度
 		if latestRSI <= s.oversoldLevel-10 {
 			result.Strength = StrengthStrong
+			result.DetailedAnalysis += " 📈 超卖程度较为严重，信号强度: 强"
 		} else if latestRSI <= s.oversoldLevel-5 {
 			result.Strength = StrengthNormal
+			result.DetailedAnalysis += " 📊 超卖程度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
+			result.DetailedAnalysis += " 📉 刚进入超卖区域，信号强度: 弱"
 		}
 
 	} else {
 		// 中性区域
 		result.Signal = SignalNone
-		result.Confidence = 0.0
-		result.Message = fmt.Sprintf("RSI中性: %.2f (%.0f-%.0f)", latestRSI, s.oversoldLevel, s.overboughtLevel)
+		result.Message = fmt.Sprintf("⚪ RSI中性区域")
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 处于中性区域 (%.0f-%.0f)，市场暂无明显超买超卖信号。建议继续观察或等待更明确的信号。",
+			latestRSI, s.oversoldLevel, s.overboughtLevel)
 	}
 
 	// 添加趋势信息
@@ -144,45 +157,19 @@ func (s *RSIStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		prevRSI := rsiResult.Values[len(rsiResult.Values)-2]
 		rsiTrend := latestRSI - prevRSI
 		result.Metadata["rsi_trend"] = rsiTrend
+		result.Metadata["rsi_previous"] = prevRSI
 
-		// 趋势一致性增加置信度
-		if result.Signal == SignalBuy && rsiTrend > 0 {
-			result.Confidence = minFloat64(result.Confidence*1.1, 1.0)
-		} else if result.Signal == SignalSell && rsiTrend < 0 {
-			result.Confidence = minFloat64(result.Confidence*1.1, 1.0)
+		// 添加趋势描述
+		trendDesc := ""
+		if rsiTrend > 1 {
+			trendDesc = " 📈 RSI呈上升趋势"
+		} else if rsiTrend < -1 {
+			trendDesc = " 📉 RSI呈下降趋势"
+		} else {
+			trendDesc = " ➡️ RSI趋势平稳"
 		}
+		result.DetailedAnalysis += trendDesc
 	}
 
 	return result, nil
-}
-
-// calculateRSIConfidence 计算RSI置信度
-func calculateRSIConfidence(rsi, threshold float64, isOverbought bool) float64 {
-	var distance float64
-
-	if isOverbought {
-		// 超买：RSI越高，置信度越高
-		if rsi < threshold {
-			return 0.0
-		}
-		distance = rsi - threshold
-		maxDistance := 100.0 - threshold
-		return minFloat64(distance/maxDistance, 1.0)
-	} else {
-		// 超卖：RSI越低，置信度越高
-		if rsi > threshold {
-			return 0.0
-		}
-		distance = threshold - rsi
-		maxDistance := threshold - 0.0
-		return minFloat64(distance/maxDistance, 1.0)
-	}
-}
-
-// minFloat64 返回两个数中较小的
-func minFloat64(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
 }

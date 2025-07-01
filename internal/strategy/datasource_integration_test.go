@@ -97,16 +97,18 @@ func TestStrategyWithDataSources(t *testing.T) {
 						return
 					}
 
-					t.Logf("%s on %s: Signal=%s Confidence=%.2f Price=%.2f",
-						tc.strategyName, sourceType, result.Signal.String(), result.Confidence, result.Price)
+					t.Logf("%s on %s: Signal=%s Message=%s Summary=%s",
+						tc.strategyName, sourceType, result.Signal.String(), result.Message, result.IndicatorSummary)
 
 					// 基本验证
-					if result.Price <= 0 {
-						t.Errorf("Invalid price in result: %.2f", result.Price)
+					if price, exists := result.Indicators["price"]; exists {
+						if p, ok := price.(float64); ok && p <= 0 {
+							t.Errorf("Invalid price in result: %.2f", p)
+						}
 					}
 
-					if result.Confidence < 0 || result.Confidence > 1 {
-						t.Errorf("Invalid confidence: %.2f", result.Confidence)
+					if result.IndicatorSummary == "" {
+						t.Errorf("Missing indicator summary")
 					}
 				})
 			}

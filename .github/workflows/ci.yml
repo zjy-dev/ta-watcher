@@ -18,30 +18,51 @@ jobs:
         with:
           clean: true # 强制清理工作目录
           fetch-depth: 0 # 获取完整历史确保最新
+          persist-credentials: false # 避免凭据持久化
 
-      - name: Clear any cached configs
+      - name: Complete workspace cleanup
         run: |
-          echo "🧹 Clearing any cached configuration files..."
-          rm -f config.yaml config.example.yaml 2>/dev/null || true
-          git checkout HEAD -- config.yaml config.example.yaml 2>/dev/null || true
-          echo "✅ Using fresh configuration files from git"
+          echo "🧹 Performing complete workspace cleanup..."
+          # 清理所有可能的缓存文件
+          rm -rf ~/.cache/go-build || true
+          rm -rf ~/go/pkg/mod || true
+          rm -rf ./bin/ || true
+          rm -rf ./logs/ || true
+          rm -rf ./.env* || true
+          rm -rf ./coverage.* || true
+          # 强制重新获取所有配置文件
+          git reset --hard HEAD
+          git clean -fdx
+          echo "✅ Workspace completely cleaned"
+
+      - name: Verify fresh files
+        run: |
+          echo "📋 Verifying fresh configuration files..."
+          ls -la config*.yaml || echo "No config files found"
+          echo "📄 config.yaml content (first 10 lines):"
+          head -10 config.yaml || echo "config.yaml not found"
+          echo "📄 config.example.yaml content (first 10 lines):"
+          head -10 config.example.yaml || echo "config.example.yaml not found"
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: "1.24"
 
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-            ${{ runner.os }}-go-
+      # 禁用缓存，强制重新下载所有依赖
+      - name: Force clean Go modules
+        run: |
+          echo "🔄 Force cleaning Go modules and build cache..."
+          go clean -modcache || true
+          go clean -cache || true
+          echo "✅ Go caches cleared"
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Download dependencies (force fresh)
+        run: |
+          echo "📦 Force downloading fresh dependencies..."
+          go mod download -x
+          go mod verify
+          echo "✅ Fresh dependencies downloaded and verified"
 
       - name: Run make test-unit
         run: make test-unit
@@ -76,30 +97,39 @@ jobs:
         with:
           clean: true # 强制清理工作目录
           fetch-depth: 0 # 获取完整历史确保最新
+          persist-credentials: false # 避免凭据持久化
 
-      - name: Clear any cached configs
+      - name: Complete workspace cleanup
         run: |
-          echo "🧹 Clearing any cached configuration files..."
-          rm -f config.yaml config.example.yaml 2>/dev/null || true
-          git checkout HEAD -- config.yaml config.example.yaml 2>/dev/null || true
-          echo "✅ Using fresh configuration files from git"
+          echo "🧹 Performing complete workspace cleanup..."
+          rm -rf ~/.cache/go-build || true
+          rm -rf ~/go/pkg/mod || true
+          rm -rf ./bin/ || true
+          rm -rf ./logs/ || true
+          rm -rf ./.env* || true
+          git reset --hard HEAD
+          git clean -fdx
+          echo "✅ Workspace completely cleaned"
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: "1.24"
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-            ${{ runner.os }}-go-
+      # 禁用缓存，强制重新下载所有依赖
+      - name: Force clean Go modules
+        run: |
+          echo "🔄 Force cleaning Go modules and build cache..."
+          go clean -modcache || true
+          go clean -cache || true
+          echo "✅ Go caches cleared"
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Download dependencies (force fresh)
+        run: |
+          echo "📦 Force downloading fresh dependencies..."
+          go mod download -x
+          go mod verify
+          echo "✅ Fresh dependencies downloaded and verified"
 
       - name: Build application
         run: go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher
@@ -165,30 +195,39 @@ jobs:
         with:
           clean: true # 强制清理工作目录
           fetch-depth: 0 # 获取完整历史确保最新
+          persist-credentials: false # 避免凭据持久化
 
-      - name: Clear any cached configs
+      - name: Complete workspace cleanup
         run: |
-          echo "🧹 Clearing any cached configuration files..."
-          rm -f config.yaml config.example.yaml 2>/dev/null || true
-          git checkout HEAD -- config.yaml config.example.yaml 2>/dev/null || true
-          echo "✅ Using fresh configuration files from git"
+          echo "🧹 Performing complete workspace cleanup..."
+          rm -rf ~/.cache/go-build || true
+          rm -rf ~/go/pkg/mod || true
+          rm -rf ./bin/ || true
+          rm -rf ./logs/ || true
+          rm -rf ./.env* || true
+          git reset --hard HEAD
+          git clean -fdx
+          echo "✅ Workspace completely cleaned"
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: "1.24"
 
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-            ${{ runner.os }}-go-
+      # 禁用缓存，强制重新下载所有依赖
+      - name: Force clean Go modules
+        run: |
+          echo "🔄 Force cleaning Go modules and build cache..."
+          go clean -modcache || true
+          go clean -cache || true
+          echo "✅ Go caches cleared"
 
-      - name: Download dependencies
-        run: go mod download
+      - name: Download dependencies (force fresh)
+        run: |
+          echo "📦 Force downloading fresh dependencies..."
+          go mod download -x
+          go mod verify
+          echo "✅ Fresh dependencies downloaded and verified"
 
       - name: Build application
         run: go build -ldflags='-w -s' -o bin/ta-watcher ./cmd/watcher

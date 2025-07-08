@@ -38,6 +38,8 @@ func NewBinanceClientWithConfig(cfg *config.BinanceConfig) *BinanceClient {
 
 	if cfg != nil {
 		client.rateLimit = &cfg.RateLimit
+		fmt.Printf("🔧 [Binance] 使用配置限流: 每分钟%d请求, 延迟%v, 重试%d次\n",
+			cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.RetryDelay, cfg.RateLimit.MaxRetries)
 	} else {
 		// 默认配置（仅作为后备，强烈建议从配置文件加载）
 		client.rateLimit = &config.RateLimitConfig{
@@ -45,6 +47,8 @@ func NewBinanceClientWithConfig(cfg *config.BinanceConfig) *BinanceClient {
 			RetryDelay:        time.Second,
 			MaxRetries:        3,
 		}
+		fmt.Printf("⚠️  [Binance] 使用默认限流配置: 每分钟%d请求, 延迟%v, 重试%d次\n",
+			1200, time.Second, 3)
 	}
 
 	return client

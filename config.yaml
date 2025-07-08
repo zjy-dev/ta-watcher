@@ -1,7 +1,4 @@
-# TA Watcher 配置文件
-# 这是一个完整的示例配置，展示了所有可配置选项
-
-# 数据源配置（新增：支持多数据源切换）
+# 真实配置
 datasource:
   primary: "coinbase"       # 主数据源: binance, coinbase
   fallback: ""              # 备用数据源（留空，避免地理限制）
@@ -20,7 +17,7 @@ datasource:
   coinbase:
     # 限流配置
     rate_limit:
-      requests_per_minute: 300         # 每分钟最大请求数（极保守限流）
+      requests_per_minute: 10         # 每分钟最大请求数（极保守限流）
       retry_delay: 3s                
       max_retries: 3                 # 最大重试次数
 

@@ -37,6 +37,8 @@ func NewCoinbaseClientWithConfig(cfg *config.CoinbaseConfig) *CoinbaseClient {
 
 	if cfg != nil {
 		client.rateLimit = &cfg.RateLimit
+		fmt.Printf("🔧 [Coinbase] 使用配置限流: 每分钟%d请求, 延迟%v, 重试%d次\n",
+			cfg.RateLimit.RequestsPerMinute, cfg.RateLimit.RetryDelay, cfg.RateLimit.MaxRetries)
 	} else {
 		// 默认极保守配置（仅作为后备，强烈建议从配置文件加载）
 		client.rateLimit = &config.RateLimitConfig{
@@ -44,6 +46,8 @@ func NewCoinbaseClientWithConfig(cfg *config.CoinbaseConfig) *CoinbaseClient {
 			RetryDelay:        20 * time.Second,
 			MaxRetries:        10,
 		}
+		fmt.Printf("⚠️  [Coinbase] 使用默认限流配置: 每分钟%d请求, 延迟%v, 重试%d次\n",
+			20, 20*time.Second, 10)
 	}
 
 	return client

@@ -111,6 +111,9 @@ func LoadConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
+	// 添加限流配置调试日志
+	logRateLimitConfig(config)
+
 	return config, nil
 }
 
@@ -380,4 +383,29 @@ func (a *AssetsConfig) Validate() error {
 	}
 
 	return nil
+}
+
+// logRateLimitConfig 打印限流配置的调试日志
+func logRateLimitConfig(config *Config) {
+	fmt.Printf("🔧 限流配置调试信息:\n")
+	fmt.Printf("├── 数据源配置:\n")
+	fmt.Printf("│   ├── 主数据源: %s\n", config.DataSource.Primary)
+	fmt.Printf("│   ├── 备用数据源: %s\n", config.DataSource.Fallback)
+	fmt.Printf("│   ├── 超时时间: %v\n", config.DataSource.Timeout)
+	fmt.Printf("│   └── 最大重试: %d\n", config.DataSource.MaxRetries)
+	fmt.Printf("├── Binance 限流配置:\n")
+	fmt.Printf("│   ├── 每分钟请求数: %d\n", config.DataSource.Binance.RateLimit.RequestsPerMinute)
+	fmt.Printf("│   ├── 重试延迟: %v\n", config.DataSource.Binance.RateLimit.RetryDelay)
+	fmt.Printf("│   └── 最大重试: %d\n", config.DataSource.Binance.RateLimit.MaxRetries)
+	fmt.Printf("├── Coinbase 限流配置:\n")
+	fmt.Printf("│   ├── 每分钟请求数: %d\n", config.DataSource.Coinbase.RateLimit.RequestsPerMinute)
+	fmt.Printf("│   ├── 重试延迟: %v\n", config.DataSource.Coinbase.RateLimit.RetryDelay)
+	fmt.Printf("│   └── 最大重试: %d\n", config.DataSource.Coinbase.RateLimit.MaxRetries)
+	fmt.Printf("└── 通知配置:\n")
+	fmt.Printf("    └── 邮件启用: %t\n", config.Notifiers.Email.Enabled)
+	if config.Notifiers.Email.Enabled {
+		fmt.Printf("        ├── 发送方: %s\n", config.Notifiers.Email.From)
+		fmt.Printf("        └── 接收方: %v\n", config.Notifiers.Email.To)
+	}
+	fmt.Println("🔧 限流配置调试完成")
 }

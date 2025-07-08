@@ -21,9 +21,17 @@ func (f *Factory) CreateDataSource(sourceType string, cfg *config.Config) (DataS
 
 	switch sourceType {
 	case "binance":
+		log.Printf("🔧 Binance 限流配置:")
+		log.Printf("   ├── 每分钟请求数: %d", cfg.DataSource.Binance.RateLimit.RequestsPerMinute)
+		log.Printf("   ├── 重试延迟: %v", cfg.DataSource.Binance.RateLimit.RetryDelay)
+		log.Printf("   └── 最大重试: %d", cfg.DataSource.Binance.RateLimit.MaxRetries)
 		client := NewBinanceClientWithConfig(&cfg.DataSource.Binance)
 		return client, nil
 	case "coinbase":
+		log.Printf("🔧 Coinbase 限流配置:")
+		log.Printf("   ├── 每分钟请求数: %d", cfg.DataSource.Coinbase.RateLimit.RequestsPerMinute)
+		log.Printf("   ├── 重试延迟: %v", cfg.DataSource.Coinbase.RateLimit.RetryDelay)
+		log.Printf("   └── 最大重试: %d", cfg.DataSource.Coinbase.RateLimit.MaxRetries)
 		client := NewCoinbaseClientWithConfig(&cfg.DataSource.Coinbase)
 		return client, nil
 	default:

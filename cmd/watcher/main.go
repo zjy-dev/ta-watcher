@@ -92,7 +92,7 @@ func run() error {
 	if *singleRun {
 		// 单次运行模式：执行一次检查后退出
 		log.Printf("🔄 单次运行模式")
-		return runSingleCheck(ctx, w, cfg)
+		return performSingleRun(ctx, w, cfg)
 	}
 
 	log.Printf("🔄 守护进程模式")
@@ -126,12 +126,12 @@ func run() error {
 	return nil
 }
 
-// runSingleCheck 执行单次检查
-func runSingleCheck(ctx context.Context, w *watcher.Watcher, cfg *config.Config) error {
+// performSingleRun 执行单次检查
+func performSingleRun(ctx context.Context, w *watcher.Watcher, cfg *config.Config) error {
 	log.Println("🔍 开始执行单次检查...")
 
-	// 创建一个短期context，确保检查不会无限期运行
-	checkCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	// 创建一个一小时后超时的context
+	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
 	defer cancel()
 
 	// 1. 首先进行资产验证

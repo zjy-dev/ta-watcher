@@ -71,7 +71,7 @@ jobs:
         run: make build
 
       - name: Test health check
-        run: ./bin/ta-watcher -health -config config.example.yaml
+        run: ./bin/ta-watcher -health -config config.yaml
 
       - name: Upload test results and logs
         if: always()
@@ -261,7 +261,7 @@ jobs:
           echo "✅ All required secrets are configured"
           echo "📧 Email notifications will be sent to: ${TO_EMAIL}"
 
-          ./bin/ta-watcher --single-run --config config.example.yaml
+          ./bin/ta-watcher --single-run --config config.yaml
 
           echo "✅ Immediate run completed at $(date)"
           echo "⏰ Next scheduled runs: UTC 1:42, 7:42, 13:42, 19:42 (Beijing: 9:42, 15:42, 21:42, 3:42)"

@@ -20,8 +20,8 @@ datasource:
   coinbase:
     # 限流配置
     rate_limit:
-      requests_per_minute: 100         # 每分钟最大请求数（极保守限流）
-      retry_delay: 15s                # 重试延迟（增加到20秒）
+      requests_per_minute: 300         # 每分钟最大请求数（极保守限流）
+      retry_delay: 3s                
       max_retries: 3                 # 最大重试次数
 
 # 监控配置

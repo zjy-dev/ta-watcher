@@ -22,33 +22,27 @@ type CoinbaseClient struct {
 	requestMutex sync.Mutex
 }
 
-// NewCoinbaseClient 创建Coinbase客户端
+// NewCoinbaseClient 创建Coinbase客户端（已废弃，请使用NewCoinbaseClientWithConfig）
 func NewCoinbaseClient() *CoinbaseClient {
-	return &CoinbaseClient{
-		baseURL: "https://api.exchange.coinbase.com",
-		client:  &http.Client{Timeout: 30 * time.Second},
-		rateLimit: &config.RateLimitConfig{
-			RequestsPerMinute: 300, // 默认限流：每分钟300请求
-			RetryDelay:        5 * time.Second,
-			MaxRetries:        3,
-		},
-	}
+	// 使用默认配置创建客户端，但强烈建议使用 NewCoinbaseClientWithConfig
+	return NewCoinbaseClientWithConfig(nil)
 }
 
 // NewCoinbaseClientWithConfig 使用配置创建Coinbase客户端
 func NewCoinbaseClientWithConfig(cfg *config.CoinbaseConfig) *CoinbaseClient {
 	client := &CoinbaseClient{
 		baseURL: "https://api.exchange.coinbase.com",
-		client:  &http.Client{Timeout: 30 * time.Second},
+		client:  &http.Client{Timeout: 60 * time.Second}, // 增加到60秒
 	}
 
 	if cfg != nil {
 		client.rateLimit = &cfg.RateLimit
 	} else {
+		// 默认极保守配置（仅作为后备，强烈建议从配置文件加载）
 		client.rateLimit = &config.RateLimitConfig{
-			RequestsPerMinute: 300,
-			RetryDelay:        5 * time.Second,
-			MaxRetries:        3,
+			RequestsPerMinute: 20,
+			RetryDelay:        20 * time.Second,
+			MaxRetries:        10,
 		}
 	}
 

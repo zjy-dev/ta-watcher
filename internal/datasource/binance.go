@@ -7,22 +7,47 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
+
+	"ta-watcher/internal/config"
 )
 
 // BinanceClient Binance数据源实现
 type BinanceClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL      string
+	client       *http.Client
+	rateLimit    *config.RateLimitConfig
+	lastRequest  time.Time
+	requestMutex sync.Mutex
 }
 
-// NewBinanceClient 创建Binance客户端
+// NewBinanceClient 创建Binance客户端（已废弃，请使用NewBinanceClientWithConfig）
 func NewBinanceClient() *BinanceClient {
+	// 使用默认配置创建客户端，但强烈建议使用 NewBinanceClientWithConfig
+	return NewBinanceClientWithConfig(nil)
+}
+
+// NewBinanceClientWithConfig 使用配置创建Binance客户端
+func NewBinanceClientWithConfig(cfg *config.BinanceConfig) *BinanceClient {
 	log.Printf("🔗 初始化 Binance 数据源")
-	return &BinanceClient{
+	client := &BinanceClient{
 		baseURL: "https://api.binance.com",
 		client:  &http.Client{Timeout: 30 * time.Second},
 	}
+
+	if cfg != nil {
+		client.rateLimit = &cfg.RateLimit
+	} else {
+		// 默认配置（仅作为后备，强烈建议从配置文件加载）
+		client.rateLimit = &config.RateLimitConfig{
+			RequestsPerMinute: 1200,
+			RetryDelay:        time.Second,
+			MaxRetries:        3,
+		}
+	}
+
+	return client
 }
 
 // Name 返回数据源名称
@@ -39,7 +64,7 @@ func (b *BinanceClient) IsSymbolValid(ctx context.Context, symbol string) (bool,
 		return false, err
 	}
 
-	resp, err := b.client.Do(req)
+	resp, err := b.executeWithRateLimit(req)
 	if err != nil {
 		return false, err
 	}
@@ -83,7 +108,7 @@ func (b *BinanceClient) GetKlines(ctx context.Context, symbol string, timeframe 
 	req.URL.RawQuery = q.Encode()
 	// log.Printf("🌐 [Binance] 请求URL: %s", req.URL.String())
 
-	resp, err := b.client.Do(req)
+	resp, err := b.executeWithRateLimit(req)
 	if err != nil {
 		return nil, err
 	}
@@ -161,6 +186,49 @@ func (b *BinanceClient) parseKline(symbol string, raw []interface{}) (*Kline, er
 		Close:     close,
 		Volume:    volume,
 	}, nil
+}
+
+// rateLimitSleep 根据限流配置进行休眠
+func (b *BinanceClient) rateLimitSleep() {
+	b.requestMutex.Lock()
+	defer b.requestMutex.Unlock()
+
+	if b.rateLimit.RequestsPerMinute <= 0 {
+		return
+	}
+
+	minInterval := time.Minute / time.Duration(b.rateLimit.RequestsPerMinute)
+	elapsed := time.Since(b.lastRequest)
+	if elapsed < minInterval {
+		sleepTime := minInterval - elapsed
+		time.Sleep(sleepTime)
+	}
+	b.lastRequest = time.Now()
+}
+
+// executeWithRateLimit 执行带限流的HTTP请求
+func (b *BinanceClient) executeWithRateLimit(req *http.Request) (*http.Response, error) {
+	var resp *http.Response
+	var err error
+
+	for retry := 0; retry <= b.rateLimit.MaxRetries; retry++ {
+		b.rateLimitSleep()
+
+		resp, err = b.client.Do(req)
+		if err == nil && resp.StatusCode < 500 {
+			return resp, nil
+		}
+
+		if resp != nil {
+			resp.Body.Close()
+		}
+
+		if retry < b.rateLimit.MaxRetries {
+			time.Sleep(b.rateLimit.RetryDelay)
+		}
+	}
+
+	return resp, err
 }
 
 // parseFloat64 从interface{}解析float64

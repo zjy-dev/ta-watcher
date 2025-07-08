@@ -4,234 +4,507 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>📊 TA Watcher 交易信号报告 - 4个信号</title>
+    <title>📊 TA Watcher 交易信号报告 - 2个信号</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Microsoft+YaHei:wght@400;500;600;700&family=Consolas:wght@400;500;600&display=swap');
+        
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', Arial, sans-serif; 
             line-height: 1.6; 
             margin: 0; 
             padding: 20px; 
-            background-color: #f5f5f5; 
+            background-color: #f0f4f8;
+            color: #2c3e50;
         }
         .container {
             max-width: 900px;
             margin: 0 auto;
             background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(52, 73, 94, 0.1);
             overflow: hidden;
+            border: 1px solid #e3f2fd;
         }
         .header { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); 
             color: white; 
-            padding: 25px; 
+            padding: 30px; 
             text-align: center;
         }
         .header h1 {
-            margin: 0;
-            font-size: 24px;
+            margin: 0 0 12px 0;
+            font-size: 26px;
             font-weight: 600;
         }
         .header .timestamp { 
             color: rgba(255, 255, 255, 0.9); 
             font-size: 14px; 
-            margin-top: 8px;
+            margin-bottom: 20px;
+            font-family: 'Consolas', monospace;
         }
+        .summary-section {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f8faff 100%);
+            padding: 25px;
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .summary-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2980b9;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #d6e9f5;
+            flex: 1;
+            margin: 0 5px;
+            min-width: 120px;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .stat-buy { color: #27ae60; }
+        .stat-sell { color: #e74c3c; }
+        .stat-total { color: #3498db; }
         .content { 
             padding: 30px; 
         }
-        .message-content {
+        .signals-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        .signal-item {
+            border: 1px solid #e3f2fd;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 8px rgba(52, 73, 94, 0.08);
+        }
+        .signal-header {
+            padding: 18px 22px;
+            background: linear-gradient(135deg, #f8faff 0%, #e3f2fd 100%);
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .signal-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .signal-number {
+            background: #3498db;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        .signal-asset {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-left: 15px;
+        }
+        .signal-direction {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .signal-buy { background: #d5f4e6; color: #27ae60; }
+        .signal-sell { background: #fdeaea; color: #e74c3c; }
+        .signal-meta {
+            font-size: 13px;
+            color: #7f8c8d;
+            font-family: 'Consolas', monospace;
+        }
+        .signal-body {
+            padding: 22px;
+        }
+        .signal-core {
+            background: #f8faff;
+            border: 1px solid #e3f2fd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+        .core-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2980b9;
+            margin-bottom: 8px;
+        }
+        .core-value {
+            font-family: 'Consolas', monospace;
             font-size: 16px;
-            line-height: 1.8;
+            font-weight: 600;
+            color: #27ae60;
+        }
+        .signal-analysis {
+            margin-bottom: 18px;
+        }
+        .analysis-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .analysis-content {
+            color: #7f8c8d;
+            line-height: 1.7;
+            background: #fafbfc;
+            padding: 14px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        .signal-table {
+            margin-bottom: 18px;
+        }
+        .table-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 12px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: white;
+            border: 1px solid #e3f2fd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .data-table th {
+            background: #f8faff;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2980b9;
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f5f6fa;
+            font-family: 'Consolas', monospace;
+            color: #34495e;
+        }
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        .signal-advice {
+            background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
+            border: 1px solid #d5f4e6;
+            border-radius: 8px;
+            padding: 16px;
+            position: relative;
+        }
+        .advice-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #27ae60;
+            position: absolute;
+            top: -8px;
+            left: 15px;
+            background: white;
+            padding: 0 8px;
+        }
+        .advice-content {
+            color: #27ae60;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-top: 8px;
         }
         .footer {
-            background-color: #f8f9fa;
-            padding: 20px;
+            background: #34495e;
+            padding: 25px;
             text-align: center;
+            color: white;
+        }
+        .footer-disclaimer {
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #bdc3c7;
+            line-height: 1.6;
+        }
+        .footer-contact {
             font-size: 12px;
-            color: #6c757d;
-            border-top: 1px solid #dee2e6;
+            color: #3498db;
+            border-top: 1px solid #4a5f7a;
+            padding-top: 12px;
+        }
+        .footer-contact a {
+            color: #3498db;
+            text-decoration: none;
         }
          
         @media (max-width: 600px) {
             body { padding: 10px; }
-            .container { margin: 0; }
-            .header, .content { padding: 20px; }
-            .header h1 { font-size: 20px; }
+            .container { margin: 0; border-radius: 8px; }
+            .header, .summary-section, .content { padding: 20px; }
+            .header h1 { font-size: 22px; }
+            .summary-stats { flex-direction: column; }
+            .stat-item { margin: 5px 0; }
+            .signal-header-top { flex-direction: column; align-items: flex-start; }
+            .signal-asset { margin-left: 0; margin-top: 8px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📊 TA Watcher 交易信号报告 - 4个信号</h1>
-            <div class="timestamp">2025-07-01 16:47:51</div>
+            <h1>📊 TA Watcher 交易信号报告 - 2个信号</h1>
+            <div class="timestamp">2025-07-08 17:07:56 (UTC&#43;8)</div>
         </div>
         <div class="content">
             <div class="message-content">
-                <div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;"><h2 style="margin: 0 0 15px 0; font-size: 24px;">📊 交易信号分析报告</h2><div style="font-size: 16px; opacity: 0.9;">🕐 生成时间: 2025-07-01 16:47:51 (UTC+8)</div><div style="font-size: 16px; opacity: 0.9;">📝 触发原因: 单次检查完成</div></div><div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;"><div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #007bff;">4</div>
-		<div style="font-size: 14px; color: #6c757d;">总信号数</div>
-	</div><div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #28a745;">4 🟢</div>
-		<div style="font-size: 14px; color: #6c757d;">买入信号</div>
-	</div><div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #dc3545; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #dc3545;">0 🔴</div>
-		<div style="font-size: 14px; color: #6c757d;">卖出信号</div>
-	</div></div><div style="margin-bottom: 25px;"><h3 style="color: #495057; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">📈 交易信号详情</h3><div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><div style="padding: 15px; background-color: #d4edda; border-bottom: 1px solid #dee2e6;">
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-				<div style="font-size: 20px; font-weight: bold; color: #28a745;">🟢 ETHBTC</div>
-				<div style="padding: 6px 12px; background-color: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">买入机会</div>
+                <div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); border-radius: 8px; color: white; box-shadow: 0 4px 12px rgba(74, 144, 226, 0.2);"><h2 style="margin: 0 0 12px 0; font-size: 22px; font-weight: 600;">📊 交易信号报告</h2><div style="font-size: 14px; opacity: 0.9; margin-bottom: 6px;">报告时间：2025-07-08 17:07:56</div><div style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">触发原因：单次检查发现交易信号</div><div style="display: flex; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.15); padding: 15px; border-radius: 6px;"><div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: white;">2</div>
+		<div style="font-size: 13px; opacity: 0.85;">总信号数</div>
+	</div><div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: #a8e6a3;">2</div>
+		<div style="font-size: 13px; opacity: 0.85;">买入信号</div>
+	</div><div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: #ffb3ba;">0</div>
+		<div style="font-size: 13px; opacity: 0.85;">卖出信号</div>
+	</div></div></div><div style="margin-bottom: 30px; padding: 20px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 6px;"><h3 style="color: #2c3e50; margin-bottom: 15px; font-size: 18px; font-weight: 600; text-align: center;">📋 信号汇总</h3><div style="overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 13px;"><thead>
+			<tr style="background: #f8f9fa;">
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">序号</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">交易对</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">时间框架</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">信号类型</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">核心指标</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">触发时间</th>
+			</tr>
+		</thead>
+		<tbody><tr style="border-bottom: 1px solid #f0f0f0;">
+				<td style="padding: 10px; font-weight: 600; color: #666;">1</td>
+				<td style="padding: 10px; font-weight: 600; color: #2c3e50; font-family: monospace;">ETHBTC</td>
+				<td style="padding: 10px; color: #666;">月线</td>
+				<td style="padding: 10px;">
+					<span style="background: #5cb85c; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+						📈 买入
+					</span>
+				</td>
+				<td style="padding: 10px; font-family: monospace; color: #5cb85c; font-size: 12px;">RSI-14: 31.1 (超买>65, 超卖<35)</td>
+				<td style="padding: 10px; color: #666; font-family: monospace; font-size: 12px;">17:06:59</td>
+			</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+				<td style="padding: 10px; font-weight: 600; color: #666;">2</td>
+				<td style="padding: 10px; font-weight: 600; color: #2c3e50; font-family: monospace;">ADAETH</td>
+				<td style="padding: 10px; color: #666;">日线</td>
+				<td style="padding: 10px;">
+					<span style="background: #5cb85c; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+						📈 买入
+					</span>
+				</td>
+				<td style="padding: 10px; font-family: monospace; color: #5cb85c; font-size: 12px;">RSI-14: 28.9 (超买>65, 超卖<35)</td>
+				<td style="padding: 10px; color: #666; font-family: monospace; font-size: 12px;">17:07:29</td>
+			</tr></tbody></table></div></div><div style="margin-bottom: 30px;"><h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 20px; font-weight: 600; text-align: center; padding: 12px; background: linear-gradient(90deg, transparent, rgba(74, 144, 226, 0.1), transparent); border-radius: 6px;">📊 交易信号详情</h3><div style="border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);"><div style="padding: 15px; background: #f0f8ff; border-bottom: 1px solid #e5e5e5;">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+				<div style="display: flex; align-items: center; gap: 10px;">
+					<div style="font-size: 14px; font-weight: 600; color: #666; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px; font-family: monospace;">1</div>
+					<div style="font-size: 20px; font-weight: 600; color: #5cb85c;">↗ ETHBTC</div>
+				</div>
+				<div style="padding: 6px 12px; background: #5cb85c; color: white; border-radius: 16px; font-size: 13px; font-weight: 600;">买入 📈</div>
 			</div>
-			<div style="font-size: 14px; color: #6c757d;">时间框架: 1M | 策略: RSI_14_65_35 | 时间: 16:47:12</div>
-		</div><div style="padding: 20px; background-color: white;"><div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
-			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: #28a745; font-weight: bold;">RSI-14: 30.5 (超买>65, 超卖<35)</div>
-		</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
-				<div style="color: #6c757d; line-height: 1.6;">RSI值 30.5 已降至超卖阈值 35 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。 📉 刚进入超卖区域，信号强度: 弱 ➡️ RSI趋势平稳</div>
-			</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
-				<table style="width: 100%; border-collapse: collapse; font-size: 14px;"><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI指标</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">30.51</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI周期</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">14</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">当前价格</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">0.023000</td>
-				</tr></table></div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
-				<div style="display: flex; gap: 15px; flex-wrap: wrap;"><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超买阈值:</strong> 65
-				</span><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超卖阈值:</strong> 35
-				</span></div></div><div style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-top: 10px;">
-				<div style="color: #28a745; font-size: 14px;">💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断</div>
-			</div></div></div><div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><div style="padding: 15px; background-color: #d4edda; border-bottom: 1px solid #dee2e6;">
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-				<div style="font-size: 20px; font-weight: bold; color: #28a745;">🟢 ADABTC</div>
-				<div style="padding: 6px 12px; background-color: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">买入机会</div>
+			<div style="font-size: 13px; color: #666; background: rgba(255,255,255,0.8); padding: 6px 10px; border-radius: 4px; display: inline-block;">
+				📈 月线 | 🔍 RSI_14_65_35 | ⏰ 17:06:59
 			</div>
-			<div style="font-size: 14px; color: #6c757d;">时间框架: 1d | 策略: RSI_14_65_35 | 时间: 16:47:17</div>
-		</div><div style="padding: 20px; background-color: white;"><div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
-			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: #28a745; font-weight: bold;">RSI-14: 29.6 (超买>65, 超卖<35)</div>
+		</div><div style="padding: 20px; background: #ffffff;"><div style="margin-bottom: 15px; padding: 15px; background: linear-gradient(135deg, rgba(74, 144, 226, 0.08) 0%, rgba(53, 122, 189, 0.08) 100%); border: 1px solid #5cb85c; border-radius: 6px; position: relative;">
+			<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: #5cb85c;">核心指标</div>
+			<div style="font-family: monospace; font-size: 14px; color: #5cb85c; font-weight: 600; text-align: center; margin-top: 3px;">RSI-14: 31.1 (超买>65, 超卖<35)</div>
 		</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
-				<div style="color: #6c757d; line-height: 1.6;">RSI值 29.6 已降至超卖阈值 35 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。 📊 超卖程度适中，信号强度: 中等 📉 RSI呈下降趋势</div>
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📋</span>
+					技术分析
+				</div>
+				<div style="color: #555; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; background: #f8f9fa; padding: 12px; border-radius: 4px; border-left: 3px solid #5cb85c;">RSI值 31.1 已降至超卖阈值 35 以下，市场可能出现反弹。<br/>RSI指标显示当前价格已被低估。<br/>📉 刚进入超卖区域，信号强度: 弱<br/>➡️ RSI趋势平稳</div>
 			</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
-				<table style="width: 100%; border-collapse: collapse; font-size: 14px;"><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI指标</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">29.59</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI周期</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">14</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">当前价格</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">0.000005</td>
-				</tr></table></div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
-				<div style="display: flex; gap: 15px; flex-wrap: wrap;"><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超买阈值:</strong> 65
-				</span><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超卖阈值:</strong> 35
-				</span></div></div><div style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-top: 10px;">
-				<div style="color: #28a745; font-size: 14px;">💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断</div>
-			</div></div></div><div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><div style="padding: 15px; background-color: #d4edda; border-bottom: 1px solid #dee2e6;">
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-				<div style="font-size: 20px; font-weight: bold; color: #28a745;">🟢 ADAETH</div>
-				<div style="padding: 6px 12px; background-color: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">买入机会</div>
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📊</span>
+					指标数值
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 13px;"><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">RSI指标</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">31.11</td>
+				</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">RSI周期</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">14</td>
+				</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">当前价格</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">0.023520</td>
+				</tr></table></div></div><div style="margin-bottom: 15px;">
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📈</span>
+					多时间框架对比
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+					<thead>
+						<tr style="background: #f8f9fa;">
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">时间框架</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">指标摘要</th>
+							<th style="padding: 10px 8px; text-align: center; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">信号状态</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">详细分析</th>
+						</tr>
+					</thead>
+					<tbody><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">日线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">RSI-14: 51.9 (超买>65, 超卖<3...</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #6c757d; font-weight: 600; font-size: 11px;">⚪ 无信号</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">RSI值 51.9 处于中性区域 (35-65)，市场暂无明显超买超卖信号。<b...</td>
+					</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">周线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">RSI-14: 42.5 (超买>65, 超卖<3...</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #6c757d; font-weight: 600; font-size: 11px;">⚪ 无信号</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">RSI值 42.5 处于中性区域 (35-65)，市场暂无明显超买超卖信号。<b...</td>
+					</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">月线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">RSI-14: 31.1 (超买>65, 超卖<3...</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #5cb85c; font-weight: 600; font-size: 11px;">🟢 买入</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">RSI值 31.1 已降至超卖阈值 35 以下，市场可能出现反弹。<br/>RS...</td>
+					</tr></tbody>
+				</table></div>
+				<div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px; color: #666; text-align: center;">
+					💡 多时间框架分析有助于确认信号强度和趋势方向，建议综合考虑各时间维度的指标表现
+				</div>
+			</div><div style="padding: 12px; background: linear-gradient(135deg, #5cb85c15, #5cb85c08); border: 1px solid #5cb85c; border-radius: 6px; margin-top: 12px; position: relative;">
+				<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: #5cb85c;">操作建议</div>
+				<div style="color: #5cb85c; font-size: 13px; line-height: 1.5; margin-top: 3px; font-weight: 500;">这可能是一个潜在的买入机会。请结合其他技术指标和市场情况进行综合分析。</div>
+			</div></div></div><div style="border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);"><div style="padding: 15px; background: #f0f8ff; border-bottom: 1px solid #e5e5e5;">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+				<div style="display: flex; align-items: center; gap: 10px;">
+					<div style="font-size: 14px; font-weight: 600; color: #666; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px; font-family: monospace;">2</div>
+					<div style="font-size: 20px; font-weight: 600; color: #5cb85c;">↗ ADAETH</div>
+				</div>
+				<div style="padding: 6px 12px; background: #5cb85c; color: white; border-radius: 16px; font-size: 13px; font-weight: 600;">买入 📈</div>
 			</div>
-			<div style="font-size: 14px; color: #6c757d;">时间框架: 1d | 策略: RSI_14_65_35 | 时间: 16:47:31</div>
-		</div><div style="padding: 20px; background-color: white;"><div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
-			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: #28a745; font-weight: bold;">RSI-14: 26.1 (超买>65, 超卖<35)</div>
-		</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
-				<div style="color: #6c757d; line-height: 1.6;">RSI值 26.1 已降至超卖阈值 35 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。 📊 超卖程度适中，信号强度: 中等 📉 RSI呈下降趋势</div>
-			</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
-				<table style="width: 100%; border-collapse: collapse; font-size: 14px;"><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI指标</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">26.05</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI周期</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">14</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">当前价格</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">0.000229</td>
-				</tr></table></div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
-				<div style="display: flex; gap: 15px; flex-wrap: wrap;"><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超买阈值:</strong> 65
-				</span><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超卖阈值:</strong> 35
-				</span></div></div><div style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-top: 10px;">
-				<div style="color: #28a745; font-size: 14px;">💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断</div>
-			</div></div></div><div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"><div style="padding: 15px; background-color: #d4edda; border-bottom: 1px solid #dee2e6;">
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-				<div style="font-size: 20px; font-weight: bold; color: #28a745;">🟢 ADASOL</div>
-				<div style="padding: 6px 12px; background-color: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">买入机会</div>
+			<div style="font-size: 13px; color: #666; background: rgba(255,255,255,0.8); padding: 6px 10px; border-radius: 4px; display: inline-block;">
+				📈 日线 | 🔍 RSI_14_65_35 | ⏰ 17:07:29
 			</div>
-			<div style="font-size: 14px; color: #6c757d;">时间框架: 1d | 策略: RSI_14_65_35 | 时间: 16:47:37</div>
-		</div><div style="padding: 20px; background-color: white;"><div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
-			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: #28a745; font-weight: bold;">RSI-14: 28.9 (超买>65, 超卖<35)</div>
+		</div><div style="padding: 20px; background: #ffffff;"><div style="margin-bottom: 15px; padding: 15px; background: linear-gradient(135deg, rgba(74, 144, 226, 0.08) 0%, rgba(53, 122, 189, 0.08) 100%); border: 1px solid #5cb85c; border-radius: 6px; position: relative;">
+			<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: #5cb85c;">核心指标</div>
+			<div style="font-family: monospace; font-size: 14px; color: #5cb85c; font-weight: 600; text-align: center; margin-top: 3px;">RSI-14: 28.9 (超买>65, 超卖<35)</div>
 		</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">� 技术分析</div>
-				<div style="color: #6c757d; line-height: 1.6;">RSI值 28.9 已降至超卖阈值 35 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。 📊 超卖程度适中，信号强度: 中等 📈 RSI呈上升趋势</div>
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📋</span>
+					技术分析
+				</div>
+				<div style="color: #555; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; background: #f8f9fa; padding: 12px; border-radius: 4px; border-left: 3px solid #5cb85c;">RSI值 28.9 已降至超卖阈值 35 以下，市场可能出现反弹。<br/>RSI指标显示当前价格已被低估。<br/>📊 超卖程度适中，信号强度: 中等<br/>➡️ RSI趋势平稳</div>
 			</div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
-				<table style="width: 100%; border-collapse: collapse; font-size: 14px;"><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">当前价格</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">0.003781</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI指标</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">28.95</td>
-				</tr><tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">RSI周期</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">14</td>
-				</tr></table></div><div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
-				<div style="display: flex; gap: 15px; flex-wrap: wrap;"><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超买阈值:</strong> 65
-				</span><span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>超卖阈值:</strong> 35
-				</span></div></div><div style="padding: 10px; background-color: #d4edda; border-radius: 5px; margin-top: 10px;">
-				<div style="color: #28a745; font-size: 14px;">💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断</div>
-			</div></div></div></div><div style="margin: 25px 0; padding: 20px; background-color: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 5px;">
-		<h4 style="margin: 0 0 10px 0; color: #1976D2;">💡 交易提醒</h4>
-		<ul style="margin: 0; padding-left: 20px; color: #333;">
-			<li>技术指标仅供参考，建议结合基本面分析</li>
-			<li>请合理控制仓位，设置止损止盈</li>
-			<li>关注市场新闻和重大事件影响</li>
-			<li>避免频繁交易，保持冷静理性</li>
-		</ul>
-	</div><div style="margin: 25px 0; padding: 20px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;">
-		<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ 重要免责声明</h4>
-		<div style="color: #856404; line-height: 1.6;">
-			<p style="margin: 0 0 10px 0;">• 本报告由技术分析系统自动生成，仅供参考学习</p>
-			<p style="margin: 0 0 10px 0;">• 所有交易信号不构成投资建议或买卖推荐</p>
-			<p style="margin: 0 0 10px 0;">• 数字货币投资存在高风险，可能导致本金损失</p>
-			<p style="margin: 0;">• 请根据个人风险承受能力谨慎决策，独立承担投资风险</p>
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📊</span>
+					指标数值
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 13px;"><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">RSI指标</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">28.91</td>
+				</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">RSI周期</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">14</td>
+				</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">当前价格</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">0.000226</td>
+				</tr></table></div></div><div style="margin-bottom: 15px;">
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📈</span>
+					多时间框架对比
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+					<thead>
+						<tr style="background: #f8f9fa;">
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">时间框架</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">指标摘要</th>
+							<th style="padding: 10px 8px; text-align: center; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">信号状态</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">详细分析</th>
+						</tr>
+					</thead>
+					<tbody><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">日线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">RSI-14: 28.9 (超买>65, 超卖<3...</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #5cb85c; font-weight: 600; font-size: 11px;">🟢 买入</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">RSI值 28.9 已降至超卖阈值 35 以下，市场可能出现反弹。<br/>RS...</td>
+					</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">周线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">RSI-14: 38.1 (超买>65, 超卖<3...</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #6c757d; font-weight: 600; font-size: 11px;">⚪ 无信号</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">RSI值 38.1 处于中性区域 (35-65)，市场暂无明显超买超卖信号。<b...</td>
+					</tr><tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">月线</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">数据不足 (52/70)</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: #6c757d; font-weight: 600; font-size: 11px;">⚪ 无信号</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">K线数据点数不足以进行分析</td>
+					</tr></tbody>
+				</table></div>
+				<div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px; color: #666; text-align: center;">
+					💡 多时间框架分析有助于确认信号强度和趋势方向，建议综合考虑各时间维度的指标表现
+				</div>
+			</div><div style="padding: 12px; background: linear-gradient(135deg, #5cb85c15, #5cb85c08); border: 1px solid #5cb85c; border-radius: 6px; margin-top: 12px; position: relative;">
+				<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: #5cb85c;">操作建议</div>
+				<div style="color: #5cb85c; font-size: 13px; line-height: 1.5; margin-top: 3px; font-weight: 500;">这可能是一个潜在的买入机会。请结合其他技术指标和市场情况进行综合分析。</div>
+			</div></div></div></div><div style="margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #d9534f15, #c9302c15); border: 1px solid #d9534f; border-radius: 6px; position: relative;">
+		<div style="position: absolute; top: -10px; left: 15px; background: white; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #d9534f;">⚠️ 免责声明</div>
+		<h4 style="margin: 12px 0 12px 0; color: #d63031; font-size: 16px;">📜 重要声明</h4>
+		<div style="color: #666; line-height: 1.6; font-size: 14px;">
+			<p style="margin: 0 0 10px 0;">• 所有交易信号不构成投资建议或推荐</p>
+			<p style="margin: 0 0 10px 0;">• 加密货币投资具有高风险，可能损失全部本金</p>
+			<p style="margin: 0;">• 请根据自身风险承受能力做出决策，并进行独立研究</p>
 		</div>
-	</div><div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; text-align: center;">
-		<div style="color: #6c757d; font-size: 14px; margin-bottom: 10px;">
-			🤖 此报告由 <strong>TA Watcher v1.0.0</strong> 自动生成
+	</div><div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); border-radius: 6px; text-align: center; color: white;">
+		<div style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">
+			🤖 由 <strong>TA Watcher v1.0</strong> 提供技术支持
 		</div>
-		<div style="color: #6c757d; font-size: 12px;">
-			生成时间: 2025-07-01 16:47:51 (UTC+8) | 
-			如有技术问题请联系系统管理员
+		<div style="font-size: 12px; opacity: 0.9; margin-bottom: 1px;">
+			报告生成时间：2025-07-08 17:07:56 (UTC+8)
 		</div>
 	</div>
             </div>
         </div>
         <div class="footer">
-            <p>此邮件由 TA Watcher 自动发送，请勿回复。</p>
-            <p>如需帮助，请联系系统管理员。</p>
+            <div class="footer-disclaimer">
+                本报告仅供教育学习使用，所有信号不构成投资建议。数字货币投资有风险，请谨慎决策。
+            </div>
+            <div class="footer-contact">
+                技术支持: <a href="mailto:yysfg666@gmail.com">yysfg666@gmail.com</a>
+            </div>
         </div>
     </div>
 </body>

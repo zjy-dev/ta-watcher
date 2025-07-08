@@ -21,7 +21,7 @@ func (f *Factory) CreateDataSource(sourceType string, cfg *config.Config) (DataS
 
 	switch sourceType {
 	case "binance":
-		client := NewBinanceClient()
+		client := NewBinanceClientWithConfig(&cfg.DataSource.Binance)
 		return client, nil
 	case "coinbase":
 		client := NewCoinbaseClientWithConfig(&cfg.DataSource.Coinbase)

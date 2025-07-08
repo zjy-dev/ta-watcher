@@ -110,45 +110,45 @@ func (s *RSIStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// 超买，卖出信号
 		result.Signal = SignalSell
 		result.Message = fmt.Sprintf("🔴 RSI超买信号")
-		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已达到超买阈值 %.0f 以上，市场可能出现回调。RSI指标显示当前价格已被高估。",
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已达到超买阈值 %.0f 以上，市场可能出现回调。<br/>RSI指标显示当前价格已被高估。",
 			latestRSI, s.overboughtLevel)
 
 		// 判断强度
 		if latestRSI >= s.overboughtLevel+10 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 超买程度较为严重，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 超买程度较为严重，信号强度: 强"
 		} else if latestRSI >= s.overboughtLevel+5 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 超买程度适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 超买程度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 刚进入超买区域，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 刚进入超买区域，信号强度: 弱"
 		}
 
 	} else if latestRSI <= s.oversoldLevel {
 		// 超卖，买入信号
 		result.Signal = SignalBuy
 		result.Message = fmt.Sprintf("🟢 RSI超卖信号")
-		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已降至超卖阈值 %.0f 以下，市场可能出现反弹。RSI指标显示当前价格已被低估。",
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 已降至超卖阈值 %.0f 以下，市场可能出现反弹。<br/>RSI指标显示当前价格已被低估。",
 			latestRSI, s.oversoldLevel)
 
 		// 判断强度
 		if latestRSI <= s.oversoldLevel-10 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 超卖程度较为严重，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 超卖程度较为严重，信号强度: 强"
 		} else if latestRSI <= s.oversoldLevel-5 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 超卖程度适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 超卖程度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 刚进入超卖区域，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 刚进入超卖区域，信号强度: 弱"
 		}
 
 	} else {
 		// 中性区域
 		result.Signal = SignalNone
 		result.Message = fmt.Sprintf("⚪ RSI中性区域")
-		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 处于中性区域 (%.0f-%.0f)，市场暂无明显超买超卖信号。建议继续观察或等待更明确的信号。",
+		result.DetailedAnalysis = fmt.Sprintf("RSI值 %.1f 处于中性区域 (%.0f-%.0f)，市场暂无明显超买超卖信号。<br/>建议继续观察或等待更明确的信号。",
 			latestRSI, s.oversoldLevel, s.overboughtLevel)
 	}
 
@@ -162,11 +162,11 @@ func (s *RSIStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// 添加趋势描述
 		trendDesc := ""
 		if rsiTrend > 1 {
-			trendDesc = " 📈 RSI呈上升趋势"
+			trendDesc = "<br/>📈 RSI呈上升趋势"
 		} else if rsiTrend < -1 {
-			trendDesc = " 📉 RSI呈下降趋势"
+			trendDesc = "<br/>📉 RSI呈下降趋势"
 		} else {
-			trendDesc = " ➡️ RSI趋势平稳"
+			trendDesc = "<br/>➡️ RSI趋势平稳"
 		}
 		result.DetailedAnalysis += trendDesc
 	}

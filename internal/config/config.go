@@ -11,6 +11,26 @@ import (
 // DefaultConfig 返回默认配置
 func DefaultConfig() *Config {
 	return &Config{
+		DataSource: DataSourceConfig{
+			Primary:    "coinbase",
+			Fallback:   "",
+			Timeout:    30 * time.Second,
+			MaxRetries: 3,
+			Binance: BinanceConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 1200,
+					RetryDelay:        time.Second,
+					MaxRetries:        3,
+				},
+			},
+			Coinbase: CoinbaseConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 20,
+					RetryDelay:        20 * time.Second,
+					MaxRetries:        10,
+				},
+			},
+		},
 		Binance: BinanceConfig{
 			RateLimit: RateLimitConfig{
 				RequestsPerMinute: 1200,
@@ -154,6 +174,11 @@ func SaveConfig(config *Config, filename string) error {
 
 // Validate 验证配置有效性
 func (c *Config) Validate() error {
+	// 验证 DataSource 配置
+	if err := c.DataSource.Validate(); err != nil {
+		return fmt.Errorf("datasource config: %w", err)
+	}
+
 	// 验证 Binance 配置
 	if err := c.Binance.Validate(); err != nil {
 		return fmt.Errorf("binance config: %w", err)
@@ -177,8 +202,50 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// Validate 验证 DataSource 配置
+func (c *DataSourceConfig) Validate() error {
+	if c.Primary == "" {
+		return fmt.Errorf("primary datasource cannot be empty")
+	}
+
+	supportedSources := []string{"binance", "coinbase"}
+	primaryValid := false
+	for _, source := range supportedSources {
+		if c.Primary == source {
+			primaryValid = true
+			break
+		}
+	}
+	if !primaryValid {
+		return fmt.Errorf("unsupported primary datasource: %s", c.Primary)
+	}
+
+	// 验证 Binance 配置
+	if err := c.Binance.Validate(); err != nil {
+		return fmt.Errorf("binance config: %w", err)
+	}
+
+	// 验证 Coinbase 配置
+	if err := c.Coinbase.Validate(); err != nil {
+		return fmt.Errorf("coinbase config: %w", err)
+	}
+
+	return nil
+}
+
 // Validate 验证 Binance 配置
 func (c *BinanceConfig) Validate() error {
+	if c.RateLimit.RequestsPerMinute <= 0 {
+		return fmt.Errorf("requests_per_minute must be positive")
+	}
+	if c.RateLimit.MaxRetries < 0 {
+		return fmt.Errorf("max_retries cannot be negative")
+	}
+	return nil
+}
+
+// Validate 验证 Coinbase 配置
+func (c *CoinbaseConfig) Validate() error {
 	if c.RateLimit.RequestsPerMinute <= 0 {
 		return fmt.Errorf("requests_per_minute must be positive")
 	}

@@ -130,40 +130,40 @@ func (s *MACDStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// MACD线上穿信号线，买入信号
 		result.Signal = SignalBuy
 		result.Message = "🟢 MACD金叉信号"
-		result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 上穿信号线 %.4f，形成金叉。柱状图值为 %.4f。这通常预示着上升趋势的开始，建议考虑买入。",
+		result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 上穿信号线 %.4f，形成金叉。<br/>柱状图值为 %.4f。这通常预示着上升趋势的开始，建议考虑买入。",
 			macdCurrent, signalCurrent, histCurrent)
 
 		// 判断信号强度
 		crossStrength := macdCurrent - signalCurrent
 		if crossStrength > 0.002 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 交叉强度较大，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 交叉强度较大，信号强度: 强"
 		} else if crossStrength > 0.001 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 交叉强度适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 交叉强度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 交叉强度较小，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 交叉强度较小，信号强度: 弱"
 		}
 
 	} else if macdPrev >= signalPrev && macdCurrent < signalCurrent {
 		// MACD线下穿信号线，卖出信号
 		result.Signal = SignalSell
 		result.Message = "🔴 MACD死叉信号"
-		result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 下穿信号线 %.4f，形成死叉。柱状图值为 %.4f。这通常预示着下降趋势的开始，建议考虑卖出。",
+		result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 下穿信号线 %.4f，形成死叉。<br/>柱状图值为 %.4f。这通常预示着下降趋势的开始，建议考虑卖出。",
 			macdCurrent, signalCurrent, histCurrent)
 
 		// 判断信号强度
 		crossStrength := signalCurrent - macdCurrent
 		if crossStrength > 0.002 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 交叉强度较大，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 交叉强度较大，信号强度: 强"
 		} else if crossStrength > 0.001 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 交叉强度适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 交叉强度适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 交叉强度较小，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 交叉强度较小，信号强度: 弱"
 		}
 
 	} else {
@@ -171,10 +171,10 @@ func (s *MACDStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		result.Signal = SignalNone
 		result.Message = "⚪ MACD无交叉信号"
 		if macdCurrent > signalCurrent {
-			result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 位于信号线 %.4f 之上，但未发生交叉。柱状图值为 %.4f，当前处于多头状态。",
+			result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 位于信号线 %.4f 之上，但未发生交叉。<br/>柱状图值为 %.4f，当前处于多头状态。",
 				macdCurrent, signalCurrent, histCurrent)
 		} else {
-			result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 位于信号线 %.4f 之下，但未发生交叉。柱状图值为 %.4f，当前处于空头状态。",
+			result.DetailedAnalysis = fmt.Sprintf("MACD线 %.4f 位于信号线 %.4f 之下，但未发生交叉。<br/>柱状图值为 %.4f，当前处于空头状态。",
 				macdCurrent, signalCurrent, histCurrent)
 		}
 	}
@@ -191,11 +191,11 @@ func (s *MACDStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// 添加趋势描述
 		trendDesc := ""
 		if macdTrend3 > 0 && histTrend3 > 0 {
-			trendDesc = " 📈 MACD和柱状图均呈上升趋势"
+			trendDesc = "<br/>📈 MACD和柱状图均呈上升趋势"
 		} else if macdTrend3 < 0 && histTrend3 < 0 {
-			trendDesc = " 📉 MACD和柱状图均呈下降趋势"
+			trendDesc = "<br/>📉 MACD和柱状图均呈下降趋势"
 		} else {
-			trendDesc = " ➡️ MACD趋势方向分歧"
+			trendDesc = "<br/>➡️ MACD趋势方向分歧"
 		}
 		result.DetailedAnalysis += trendDesc
 	}

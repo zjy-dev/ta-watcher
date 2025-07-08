@@ -64,7 +64,7 @@ func NewEmailNotifier(cfg *config.EmailConfig) (*EmailNotifier, error) {
 
 // parseTemplate 解析邮件模板
 func (e *EmailNotifier) parseTemplate() error {
-	// 统一的交易信号邮件模板
+	// 传统蓝色浅色主题邮件模板
 	defaultTemplate := `
 <!DOCTYPE html>
 <html>
@@ -73,58 +73,270 @@ func (e *EmailNotifier) parseTemplate() error {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Microsoft+YaHei:wght@400;500;600;700&family=Consolas:wght@400;500;600&display=swap');
+        
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; 
+            font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', Arial, sans-serif; 
             line-height: 1.6; 
             margin: 0; 
             padding: 20px; 
-            background-color: #f5f5f5; 
+            background-color: #f0f4f8;
+            color: #2c3e50;
         }
         .container {
             max-width: 900px;
             margin: 0 auto;
             background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(52, 73, 94, 0.1);
             overflow: hidden;
+            border: 1px solid #e3f2fd;
         }
         .header { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); 
             color: white; 
-            padding: 25px; 
+            padding: 30px; 
             text-align: center;
         }
         .header h1 {
-            margin: 0;
-            font-size: 24px;
+            margin: 0 0 12px 0;
+            font-size: 26px;
             font-weight: 600;
         }
         .header .timestamp { 
             color: rgba(255, 255, 255, 0.9); 
             font-size: 14px; 
-            margin-top: 8px;
+            margin-bottom: 20px;
+            font-family: 'Consolas', monospace;
         }
+        .summary-section {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f8faff 100%);
+            padding: 25px;
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .summary-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2980b9;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #d6e9f5;
+            flex: 1;
+            margin: 0 5px;
+            min-width: 120px;
+        }
+        .stat-number {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        .stat-buy { color: #27ae60; }
+        .stat-sell { color: #e74c3c; }
+        .stat-total { color: #3498db; }
         .content { 
             padding: 30px; 
         }
-        .message-content {
+        .signals-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 25px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        .signal-item {
+            border: 1px solid #e3f2fd;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            background: white;
+            box-shadow: 0 2px 8px rgba(52, 73, 94, 0.08);
+        }
+        .signal-header {
+            padding: 18px 22px;
+            background: linear-gradient(135deg, #f8faff 0%, #e3f2fd 100%);
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .signal-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .signal-number {
+            background: #3498db;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        .signal-asset {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-left: 15px;
+        }
+        .signal-direction {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .signal-buy { background: #d5f4e6; color: #27ae60; }
+        .signal-sell { background: #fdeaea; color: #e74c3c; }
+        .signal-meta {
+            font-size: 13px;
+            color: #7f8c8d;
+            font-family: 'Consolas', monospace;
+        }
+        .signal-body {
+            padding: 22px;
+        }
+        .signal-core {
+            background: #f8faff;
+            border: 1px solid #e3f2fd;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 18px;
+        }
+        .core-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2980b9;
+            margin-bottom: 8px;
+        }
+        .core-value {
+            font-family: 'Consolas', monospace;
             font-size: 16px;
-            line-height: 1.8;
+            font-weight: 600;
+            color: #27ae60;
+        }
+        .signal-analysis {
+            margin-bottom: 18px;
+        }
+        .analysis-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        .analysis-content {
+            color: #7f8c8d;
+            line-height: 1.7;
+            background: #fafbfc;
+            padding: 14px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+        .signal-table {
+            margin-bottom: 18px;
+        }
+        .table-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 12px;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            background: white;
+            border: 1px solid #e3f2fd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .data-table th {
+            background: #f8faff;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #2980b9;
+            border-bottom: 1px solid #e0e7ed;
+        }
+        .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #f5f6fa;
+            font-family: 'Consolas', monospace;
+            color: #34495e;
+        }
+        .data-table tr:last-child td {
+            border-bottom: none;
+        }
+        .signal-advice {
+            background: linear-gradient(135deg, #e8f5e8 0%, #f0f8f0 100%);
+            border: 1px solid #d5f4e6;
+            border-radius: 8px;
+            padding: 16px;
+            position: relative;
+        }
+        .advice-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #27ae60;
+            position: absolute;
+            top: -8px;
+            left: 15px;
+            background: white;
+            padding: 0 8px;
+        }
+        .advice-content {
+            color: #27ae60;
+            font-size: 14px;
+            line-height: 1.6;
+            margin-top: 8px;
         }
         .footer {
-            background-color: #f8f9fa;
-            padding: 20px;
+            background: #34495e;
+            padding: 25px;
             text-align: center;
+            color: white;
+        }
+        .footer-disclaimer {
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #bdc3c7;
+            line-height: 1.6;
+        }
+        .footer-contact {
             font-size: 12px;
-            color: #6c757d;
-            border-top: 1px solid #dee2e6;
+            color: #3498db;
+            border-top: 1px solid #4a5f7a;
+            padding-top: 12px;
+        }
+        .footer-contact a {
+            color: #3498db;
+            text-decoration: none;
         }
         /* 响应式设计 */
         @media (max-width: 600px) {
             body { padding: 10px; }
-            .container { margin: 0; }
-            .header, .content { padding: 20px; }
-            .header h1 { font-size: 20px; }
+            .container { margin: 0; border-radius: 8px; }
+            .header, .summary-section, .content { padding: 20px; }
+            .header h1 { font-size: 22px; }
+            .summary-stats { flex-direction: column; }
+            .stat-item { margin: 5px 0; }
+            .signal-header-top { flex-direction: column; align-items: flex-start; }
+            .signal-asset { margin-left: 0; margin-top: 8px; }
         }
     </style>
 </head>
@@ -140,8 +352,12 @@ func (e *EmailNotifier) parseTemplate() error {
             </div>
         </div>
         <div class="footer">
-            <p>此邮件由 TA Watcher 自动发送，请勿回复。</p>
-            <p>如需帮助，请联系系统管理员。</p>
+            <div class="footer-disclaimer">
+                本报告仅供教育学习使用，所有信号不构成投资建议。数字货币投资有风险，请谨慎决策。
+            </div>
+            <div class="footer-contact">
+                技术支持: <a href="mailto:yysfg666@gmail.com">yysfg666@gmail.com</a>
+            </div>
         </div>
     </div>
 </body>
@@ -181,6 +397,7 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 
 	// 发送邮件
 	addr := net.JoinHostPort(e.config.SMTP.Host, fmt.Sprintf("%d", e.config.SMTP.Port))
+	log.Printf("📧 开始发送邮件: %s -> %v (共 %d 个收件人)", e.config.From, e.config.To, len(e.config.To))
 
 	var sendErr error
 	if e.config.SMTP.TLS {
@@ -190,6 +407,7 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 	}
 
 	if sendErr != nil {
+		log.Printf("❌ 邮件发送失败: %v", sendErr)
 		return sendErr
 	}
 
@@ -207,13 +425,16 @@ func (e *EmailNotifier) Send(notification *Notification) error {
 // prepareEmail 准备邮件内容
 func (e *EmailNotifier) prepareEmail(notification *Notification) (string, string, error) {
 	// 准备模板数据
+	// 设置时区为 UTC+8
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+
 	data := struct {
 		*Notification
 		FormattedTime string
 		HTMLMessage   template.HTML // 不会被HTML转义的消息内容
 	}{
 		Notification:  notification,
-		FormattedTime: notification.Timestamp.Format("2006-01-02 15:04:05"),
+		FormattedTime: notification.Timestamp.In(loc).Format("2006-01-02 15:04:05 (UTC+8)"),
 		HTMLMessage:   template.HTML(notification.Message), // 将消息转换为template.HTML类型
 	}
 
@@ -247,13 +468,19 @@ func (e *EmailNotifier) buildMessage(subject, body string) []byte {
 	msg.WriteString("MIME-Version: 1.0\r\n")
 	msg.WriteString("Content-Type: text/html; charset=\"UTF-8\"\r\n")
 	msg.WriteString(fmt.Sprintf("From: %s\r\n", e.config.From))
-	msg.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(e.config.To, ", ")))
+
+	// 构建To头部，确保格式正确
+	toHeader := strings.Join(e.config.To, ", ")
+	msg.WriteString(fmt.Sprintf("To: %s\r\n", toHeader))
+
 	msg.WriteString(fmt.Sprintf("Subject: %s\r\n", subject))
+	msg.WriteString("Date: " + time.Now().Format(time.RFC1123Z) + "\r\n")
 	msg.WriteString("\r\n")
 
 	// 邮件正文
 	msg.WriteString(body)
 
+	log.Printf("📧 邮件头部 To: %s (包含 %d 个收件人)", toHeader, len(e.config.To))
 	return msg.Bytes()
 }
 
@@ -298,10 +525,12 @@ func (e *EmailNotifier) sendWithTLS(addr string, msg []byte) error {
 
 	// 设置接收者
 	for _, to := range e.config.To {
+		log.Printf("📧 添加收件人: %s", to)
 		if err := client.Rcpt(to); err != nil {
 			return fmt.Errorf("failed to set recipient %s: %w", to, err)
 		}
 	}
+	log.Printf("📧 所有收件人添加完成，共 %d 个", len(e.config.To))
 
 	// 发送数据
 	w, err := client.Data()
@@ -318,6 +547,7 @@ func (e *EmailNotifier) sendWithTLS(addr string, msg []byte) error {
 
 // sendWithoutTLS 不使用 TLS 发送邮件
 func (e *EmailNotifier) sendWithoutTLS(addr string, msg []byte) error {
+	log.Printf("📧 使用 SendMail 发送到 %d 个收件人", len(e.config.To))
 	return smtp.SendMail(addr, e.auth, e.config.From, e.config.To, msg)
 }
 

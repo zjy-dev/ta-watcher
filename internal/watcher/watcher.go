@@ -27,16 +27,27 @@ type Watcher struct {
 
 // SignalInfo 简单的信号信息结构
 type SignalInfo struct {
-	Symbol           string
+	Symbol             string
+	Timeframe          string
+	Signal             strategy.Signal
+	Strategy           string
+	Timestamp          time.Time
+	Message            string                   // 策略提供的简短消息
+	IndicatorSummary   string                   // 指标摘要
+	DetailedAnalysis   string                   // 详细分析
+	AllIndicators      map[string]interface{}   // 所有指标值
+	Thresholds         map[string]interface{}   // 策略阈值
+	MultiTimeframeData map[string]TimeframeData // 多时间框架数据
+}
+
+// TimeframeData 时间框架数据
+type TimeframeData struct {
 	Timeframe        string
-	Signal           strategy.Signal
-	Strategy         string
-	Timestamp        time.Time
-	Message          string                 // 策略提供的简短消息
-	IndicatorSummary string                 // 指标摘要
-	DetailedAnalysis string                 // 详细分析
-	AllIndicators    map[string]interface{} // 所有指标值
-	Thresholds       map[string]interface{} // 策略阈值
+	Indicators       map[string]interface{}
+	IndicatorSummary string
+	DetailedAnalysis string
+	HasSignal        bool
+	SignalType       strategy.Signal
 }
 
 // New 创建新的监控器
@@ -190,12 +201,19 @@ func (w *Watcher) analyzeSymbol(ctx context.Context, symbol string, timeframe da
 	// 尝试直接获取K线数据
 	klines, err := w.dataSource.GetKlines(ctx, symbol, timeframe, startTime, endTime, maxDataPoints*2)
 	if err != nil {
-		// 如果直接获取失败，尝试计算汇率对
-		calculatedKlines, calcErr := w.tryCalculateRatePair(ctx, symbol, timeframe, startTime, endTime, maxDataPoints*2)
-		if calcErr != nil {
-			return fmt.Errorf("获取K线数据失败，计算汇率也失败: 原始错误=%v, 计算错误=%v", err, calcErr)
+		// 如果直接获取失败，判断是否为交叉汇率对并尝试计算
+		log.Printf("🔍 直接获取 %s 失败，判断是否为交叉汇率对: %v", symbol, err)
+		isCrossRatePair := w.isCrossRatePair(symbol)
+
+		if isCrossRatePair {
+			log.Printf("🔄 %s 是交叉汇率对，尝试通过计算获取汇率数据", symbol)
+			klines, err = w.getCrossRateKlines(ctx, symbol, timeframe, startTime, endTime, maxDataPoints*2)
+			if err != nil {
+				return fmt.Errorf("获取交叉汇率K线数据失败: %w", err)
+			}
+		} else {
+			return fmt.Errorf("获取K线数据失败: %w", err)
 		}
-		klines = calculatedKlines
 	}
 
 	if len(klines) < maxDataPoints {
@@ -242,18 +260,22 @@ func (w *Watcher) recordSignal(symbol string, timeframe datasource.Timeframe, st
 		return
 	}
 
+	// 收集该交易对在所有时间框架的数据
+	multiTimeframeData := w.collectMultiTimeframeData(symbol, string(timeframe))
+
 	// 添加信号到简单列表
 	signal := SignalInfo{
-		Symbol:           symbol,
-		Timeframe:        string(timeframe),
-		Signal:           result.Signal,
-		Strategy:         strategyName,
-		Timestamp:        time.Now(),
-		Message:          result.Message,
-		IndicatorSummary: result.IndicatorSummary,
-		DetailedAnalysis: result.DetailedAnalysis,
-		AllIndicators:    result.Indicators,
-		Thresholds:       result.Thresholds,
+		Symbol:             symbol,
+		Timeframe:          string(timeframe),
+		Signal:             result.Signal,
+		Strategy:           strategyName,
+		Timestamp:          time.Now(),
+		Message:            result.Message,
+		IndicatorSummary:   result.IndicatorSummary,
+		DetailedAnalysis:   result.DetailedAnalysis,
+		AllIndicators:      result.Indicators,
+		Thresholds:         result.Thresholds,
+		MultiTimeframeData: multiTimeframeData,
 	}
 	w.signals = append(w.signals, signal)
 
@@ -335,42 +357,108 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 	loc, _ := time.LoadLocation("Asia/Shanghai") // 可以从配置中读取
 	now := time.Now().In(loc)
 
-	// 生成 HTML 格式的邮件内容
+	// 生成 HTML 格式的邮件内容，使用传统中文风格
 	var messageBuilder strings.Builder
 
-	// 报告头部摘要
-	messageBuilder.WriteString(`<div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; color: white;">`)
-	messageBuilder.WriteString(`<h2 style="margin: 0 0 15px 0; font-size: 24px;">📊 交易信号分析报告</h2>`)
-	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 16px; opacity: 0.9;">🕐 生成时间: %s (UTC+8)</div>`, now.Format("2006-01-02 15:04:05")))
-	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 16px; opacity: 0.9;">📝 触发原因: %s</div>`, reason))
-	messageBuilder.WriteString(`</div>`)
+	// 报告摘要 - 简洁传统风格
+	messageBuilder.WriteString(`<div style="margin-bottom: 25px; padding: 20px; background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); border-radius: 8px; color: white; box-shadow: 0 4px 12px rgba(74, 144, 226, 0.2);">`)
+	messageBuilder.WriteString(`<h2 style="margin: 0 0 12px 0; font-size: 22px; font-weight: 600;">📊 交易信号报告</h2>`)
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 14px; opacity: 0.9; margin-bottom: 6px;">报告时间：%s</div>`, now.Format("2006-01-02 15:04:05")))
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="font-size: 14px; opacity: 0.9; margin-bottom: 15px;">触发原因：%s</div>`, reason))
 
-	// 快速统计面板
-	messageBuilder.WriteString(`<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">`)
-
-	// 总信号数卡片
-	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #007bff; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #007bff;">%d</div>
-		<div style="font-size: 14px; color: #6c757d;">总信号数</div>
+	// 统计信息面板 - 简洁风格
+	messageBuilder.WriteString(`<div style="display: flex; gap: 15px; flex-wrap: wrap; background: rgba(255,255,255,0.15); padding: 15px; border-radius: 6px;">`)
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: white;">%d</div>
+		<div style="font-size: 13px; opacity: 0.85;">总信号数</div>
 	</div>`, len(w.signals)))
-
-	// 买入信号卡片
-	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #28a745; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #28a745;">%d 🟢</div>
-		<div style="font-size: 14px; color: #6c757d;">买入信号</div>
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: #a8e6a3;">%d</div>
+		<div style="font-size: 13px; opacity: 0.85;">买入信号</div>
 	</div>`, buySignals))
-
-	// 卖出信号卡片
-	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 120px; padding: 15px; background-color: #f8f9fa; border-left: 4px solid #dc3545; border-radius: 5px;">
-		<div style="font-size: 24px; font-weight: bold; color: #dc3545;">%d 🔴</div>
-		<div style="font-size: 14px; color: #6c757d;">卖出信号</div>
+	messageBuilder.WriteString(fmt.Sprintf(`<div style="flex: 1; min-width: 100px; text-align: center;">
+		<div style="font-size: 20px; font-weight: 600; color: #ffb3ba;">%d</div>
+		<div style="font-size: 13px; opacity: 0.85;">卖出信号</div>
 	</div>`, sellSignals))
+	messageBuilder.WriteString(`</div></div>`)
 
-	messageBuilder.WriteString(`</div>`)
+	// 信号汇总表 - 新增
+	if len(w.signals) > 0 {
+		messageBuilder.WriteString(`<div style="margin-bottom: 30px; padding: 20px; background: #ffffff; border: 1px solid #e5e5e5; border-radius: 6px;">`)
+		messageBuilder.WriteString(`<h3 style="color: #2c3e50; margin-bottom: 15px; font-size: 18px; font-weight: 600; text-align: center;">📋 信号汇总</h3>`)
+		messageBuilder.WriteString(`<div style="overflow-x: auto;">`)
+		messageBuilder.WriteString(`<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`)
+		messageBuilder.WriteString(`<thead>
+			<tr style="background: #f8f9fa;">
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">序号</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">交易对</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">时间框架</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">信号类型</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">核心指标</th>
+				<th style="padding: 12px 10px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">触发时间</th>
+			</tr>
+		</thead>
+		<tbody>`)
 
-	// 信号详情部分
-	messageBuilder.WriteString(`<div style="margin-bottom: 25px;">`)
-	messageBuilder.WriteString(`<h3 style="color: #495057; margin-bottom: 20px; font-size: 20px; border-bottom: 2px solid #e9ecef; padding-bottom: 10px;">📈 交易信号详情</h3>`)
+		for i, signal := range w.signals {
+			// 信号类型样式
+			signalColor := "#5cb85c"
+			signalText := "买入"
+			signalIcon := "📈"
+			if signal.Signal == strategy.SignalSell {
+				signalColor = "#d9534f"
+				signalText = "卖出"
+				signalIcon = "📉"
+			}
+
+			// 时间框架显示
+			timeframeDisplay := signal.Timeframe
+			switch signal.Timeframe {
+			case "1d":
+				timeframeDisplay = "日线"
+			case "1w":
+				timeframeDisplay = "周线"
+			case "1M":
+				timeframeDisplay = "月线"
+			case "4h":
+				timeframeDisplay = "4小时"
+			case "1h":
+				timeframeDisplay = "1小时"
+			case "15m":
+				timeframeDisplay = "15分钟"
+			case "5m":
+				timeframeDisplay = "5分钟"
+			case "1m":
+				timeframeDisplay = "1分钟"
+			}
+
+			// 核心指标简化显示 - 使用rune来正确处理中文字符
+			coreIndicator := signal.IndicatorSummary
+			if len([]rune(coreIndicator)) > 30 {
+				runes := []rune(coreIndicator)
+				coreIndicator = string(runes[:30]) + "..."
+			}
+
+			messageBuilder.WriteString(fmt.Sprintf(`<tr style="border-bottom: 1px solid #f0f0f0;">
+				<td style="padding: 10px; font-weight: 600; color: #666;">%d</td>
+				<td style="padding: 10px; font-weight: 600; color: #2c3e50; font-family: monospace;">%s</td>
+				<td style="padding: 10px; color: #666;">%s</td>
+				<td style="padding: 10px;">
+					<span style="background: %s; color: white; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: 600;">
+						%s %s
+					</span>
+				</td>
+				<td style="padding: 10px; font-family: monospace; color: %s; font-size: 12px;">%s</td>
+				<td style="padding: 10px; color: #666; font-family: monospace; font-size: 12px;">%s</td>
+			</tr>`, i+1, signal.Symbol, timeframeDisplay, signalColor, signalIcon, signalText, signalColor, coreIndicator, signal.Timestamp.In(loc).Format("15:04:05")))
+		}
+
+		messageBuilder.WriteString(`</tbody></table></div></div>`)
+	}
+
+	// 信号详情部分 - 中文传统风格
+	messageBuilder.WriteString(`<div style="margin-bottom: 30px;">`)
+	messageBuilder.WriteString(`<h3 style="color: #2c3e50; margin-bottom: 20px; font-size: 20px; font-weight: 600; text-align: center; padding: 12px; background: linear-gradient(90deg, transparent, rgba(74, 144, 226, 0.1), transparent); border-radius: 6px;">📊 交易信号详情</h3>`)
 
 	displayCount := len(w.signals)
 	if displayCount > 10 {
@@ -380,51 +468,86 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 	for i := 0; i < displayCount; i++ {
 		signal := w.signals[i]
 
-		// 信号方向颜色和图标
-		signalColor := "#28a745" // 绿色 (买入)
-		signalBgColor := "#d4edda"
-		signalIcon := "🟢"
-		signalText := "买入机会"
+		// 信号方向颜色和图标 - 传统风格
+		signalColor := "#5cb85c" // 蓝绿色 (买入)
+		signalBgColor := "#f0f8ff"
+		signalIcon := "↗"
+		signalText := "买入"
+		signalEmoji := "📈"
 		if signal.Signal == strategy.SignalSell {
-			signalColor = "#dc3545" // 红色 (卖出)
-			signalBgColor = "#f8d7da"
-			signalIcon = "🔴"
-			signalText = "卖出机会"
+			signalColor = "#d9534f" // 红色 (卖出)
+			signalBgColor = "#fff5f5"
+			signalIcon = "↘"
+			signalText = "卖出"
+			signalEmoji = "📉"
 		}
 
-		messageBuilder.WriteString(`<div style="border: 1px solid #dee2e6; border-radius: 10px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">`)
+		messageBuilder.WriteString(`<div style="border: 1px solid #e5e5e5; border-radius: 6px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">`)
 
-		// 信号头部
-		messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 15px; background-color: %s; border-bottom: 1px solid #dee2e6;">
-			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-				<div style="font-size: 20px; font-weight: bold; color: %s;">%s %s</div>
-				<div style="padding: 6px 12px; background-color: %s; color: white; border-radius: 20px; font-size: 14px; font-weight: bold;">%s</div>
+		// 信号头部 - 传统风格
+		// 时间框架友好显示
+		timeframeDisplay := signal.Timeframe
+		switch signal.Timeframe {
+		case "1d":
+			timeframeDisplay = "日线"
+		case "1w":
+			timeframeDisplay = "周线"
+		case "1M":
+			timeframeDisplay = "月线"
+		case "4h":
+			timeframeDisplay = "4小时"
+		case "1h":
+			timeframeDisplay = "1小时"
+		case "15m":
+			timeframeDisplay = "15分钟"
+		case "5m":
+			timeframeDisplay = "5分钟"
+		case "1m":
+			timeframeDisplay = "1分钟"
+		}
+
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 15px; background: %s; border-bottom: 1px solid #e5e5e5;">
+			<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+				<div style="display: flex; align-items: center; gap: 10px;">
+					<div style="font-size: 14px; font-weight: 600; color: #666; background: rgba(0,0,0,0.05); padding: 2px 8px; border-radius: 12px; font-family: monospace;">%d</div>
+					<div style="font-size: 20px; font-weight: 600; color: %s;">%s %s</div>
+				</div>
+				<div style="padding: 6px 12px; background: %s; color: white; border-radius: 16px; font-size: 13px; font-weight: 600;">%s %s</div>
 			</div>
-			<div style="font-size: 14px; color: #6c757d;">时间框架: %s | 策略: %s | 时间: %s</div>
-		</div>`, signalBgColor, signalColor, signalIcon, signal.Symbol, signalColor, signalText, signal.Timeframe, signal.Strategy, signal.Timestamp.In(loc).Format("15:04:05")))
+			<div style="font-size: 13px; color: #666; background: rgba(255,255,255,0.8); padding: 6px 10px; border-radius: 4px; display: inline-block;">
+				📈 %s | 🔍 %s | ⏰ %s
+			</div>
+		</div>`, signalBgColor, i+1, signalColor, signalIcon, signal.Symbol, signalColor, signalText, signalEmoji, timeframeDisplay, signal.Strategy, signal.Timestamp.In(loc).Format("15:04:05")))
 
-		// 信号内容区域
-		messageBuilder.WriteString(`<div style="padding: 20px; background-color: white;">`)
+		// 信号内容区域 - 传统风格
+		messageBuilder.WriteString(`<div style="padding: 20px; background: #ffffff;">`)
 
-		// 指标摘要 - 突出显示
-		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px; padding: 12px; background-color: #f8f9fa; border-left: 4px solid %s; border-radius: 5px;">
-			<div style="font-weight: bold; color: #495057; margin-bottom: 5px;">📊 核心指标</div>
-			<div style="font-family: 'Courier New', monospace; font-size: 16px; color: %s; font-weight: bold;">%s</div>
-		</div>`, signalColor, signalColor, signal.IndicatorSummary))
+		// 指标摘要 - 传统风格突出显示
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px; padding: 15px; background: linear-gradient(135deg, rgba(74, 144, 226, 0.08) 0%%, rgba(53, 122, 189, 0.08) 100%%); border: 1px solid %s; border-radius: 6px; position: relative;">
+			<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: %s;">核心指标</div>
+			<div style="font-family: monospace; font-size: 14px; color: %s; font-weight: 600; text-align: center; margin-top: 3px;">%s</div>
+		</div>`, signalColor, signalColor, signalColor, signal.IndicatorSummary))
 
-		// 详细分析
+		// 详细分析 - 传统风格
 		if signal.DetailedAnalysis != "" {
 			messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">💻 技术分析</div>
-				<div style="color: #6c757d; line-height: 1.6;">%s</div>
-			</div>`, signal.DetailedAnalysis))
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📋</span>
+					技术分析
+				</div>
+				<div style="color: #555; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; background: #f8f9fa; padding: 12px; border-radius: 4px; border-left: 3px solid %s;">%s</div>
+			</div>`, signalColor, signal.DetailedAnalysis))
 		}
 
-		// 关键指标值表格
+		// 关键指标值表格 - 传统风格
 		if len(signal.AllIndicators) > 0 {
 			messageBuilder.WriteString(`<div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">📈 关键数据</div>
-				<table style="width: 100%; border-collapse: collapse; font-size: 14px;">`)
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📊</span>
+					指标数值
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 13px;">`)
 
 			for key, value := range signal.AllIndicators {
 				displayKey := key
@@ -456,53 +579,98 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 					}
 				}
 
-				messageBuilder.WriteString(fmt.Sprintf(`<tr>
-					<td style="padding: 8px; border: 1px solid #dee2e6; background-color: #f8f9fa; font-weight: bold;">%s</td>
-					<td style="padding: 8px; border: 1px solid #dee2e6;">%s</td>
+				messageBuilder.WriteString(fmt.Sprintf(`<tr style="border-bottom: 1px solid #f0f0f0;">
+					<td style="padding: 10px 12px; background: #f8f9fa; font-weight: 600; color: #2c3e50; font-family: monospace;">%s</td>
+					<td style="padding: 10px 12px; font-family: monospace; color: #333; font-weight: 500;">%s</td>
 				</tr>`, displayKey, valueStr))
 			}
-			messageBuilder.WriteString(`</table>`)
-			messageBuilder.WriteString(`</div>`)
+			messageBuilder.WriteString(`</table></div></div>`)
 		}
 
-		// 阈值信息
-		if len(signal.Thresholds) > 0 {
+		// 多时间框架数据展示 - 传统风格
+		if len(signal.MultiTimeframeData) > 0 {
 			messageBuilder.WriteString(`<div style="margin-bottom: 15px;">
-				<div style="font-weight: bold; color: #495057; margin-bottom: 8px;">⚖️ 策略阈值</div>
-				<div style="display: flex; gap: 15px; flex-wrap: wrap;">`)
+				<div style="font-weight: 600; color: #2c3e50; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+					<span style="color: #4a90e2; font-size: 14px;">📈</span>
+					多时间框架对比
+				</div>
+				<div style="background: #ffffff; border-radius: 6px; overflow: hidden; border: 1px solid #e5e5e5;">
+				<table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+					<thead>
+						<tr style="background: #f8f9fa;">
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">时间框架</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">指标摘要</th>
+							<th style="padding: 10px 8px; text-align: center; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">信号状态</th>
+							<th style="padding: 10px 8px; text-align: left; font-weight: 600; color: #2c3e50; border-bottom: 2px solid #e5e5e5;">详细分析</th>
+						</tr>
+					</thead>
+					<tbody>`)
 
-			for key, value := range signal.Thresholds {
-				displayKey := key
-				switch key {
-				case "overbought_level":
-					displayKey = "超买阈值"
-				case "oversold_level":
-					displayKey = "超卖阈值"
-				case "short_period":
-					displayKey = "短周期"
-				case "long_period":
-					displayKey = "长周期"
+			// 按时间框架顺序排列：日线、周线、月线
+			timeframeOrder := []string{"1d", "1w", "1M"}
+			for _, tf := range timeframeOrder {
+				if tfData, exists := signal.MultiTimeframeData[tf]; exists {
+					// 信号状态指示器
+					statusIndicator := "⚪ 无信号"
+					statusColor := "#6c757d"
+					if tfData.HasSignal {
+						if tfData.SignalType == strategy.SignalBuy {
+							statusIndicator = "🟢 买入"
+							statusColor = "#5cb85c"
+						} else if tfData.SignalType == strategy.SignalSell {
+							statusIndicator = "🔴 卖出"
+							statusColor = "#d9534f"
+						}
+					}
+
+					// 指标摘要处理
+					indicatorSummary := tfData.IndicatorSummary
+
+					if len([]rune(indicatorSummary)) > 25 {
+						runes := []rune(indicatorSummary)
+						// 截断并添加省略号
+						indicatorSummary = string(runes[:25]) + "..."
+					}
+
+					// 详细分析处理
+					detailedAnalysis := tfData.DetailedAnalysis
+					if len([]rune(detailedAnalysis)) > 40 {
+						runes := []rune(detailedAnalysis)
+						detailedAnalysis = string(runes[:40]) + "..."
+					}
+
+					messageBuilder.WriteString(fmt.Sprintf(`<tr style="border-bottom: 1px solid #f0f0f0;">
+						<td style="padding: 8px; font-weight: 600; color: #2c3e50; font-family: monospace;">%s</td>
+						<td style="padding: 8px; color: #333; font-family: monospace; font-size: 11px;">%s</td>
+						<td style="padding: 8px; text-align: center;">
+							<span style="color: %s; font-weight: 600; font-size: 11px;">%s</span>
+						</td>
+						<td style="padding: 8px; color: #666; font-size: 11px; line-height: 1.4;">%s</td>
+					</tr>`, tfData.Timeframe, indicatorSummary, statusColor, statusIndicator, detailedAnalysis))
 				}
-
-				messageBuilder.WriteString(fmt.Sprintf(`<span style="padding: 4px 8px; background-color: #e9ecef; border-radius: 4px; font-size: 12px;">
-					<strong>%s:</strong> %v
-				</span>`, displayKey, value))
 			}
-			messageBuilder.WriteString(`</div></div>`)
+
+			messageBuilder.WriteString(`</tbody>
+				</table></div>
+				<div style="margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; font-size: 11px; color: #666; text-align: center;">
+					💡 多时间框架分析有助于确认信号强度和趋势方向，建议综合考虑各时间维度的指标表现
+				</div>
+			</div>`)
 		}
 
-		// 交易建议（如果有的话）
+		// 交易建议 - 传统风格
 		if signal.Message != "" {
-			suggestionText := "建议关注"
+			suggestionText := "继续关注市场指标变化"
 			if signal.Signal == strategy.SignalBuy {
-				suggestionText = "💡 这可能是一个买入机会，但请结合其他技术指标和市场环境进行综合判断"
+				suggestionText = "这可能是一个潜在的买入机会。请结合其他技术指标和市场情况进行综合分析。"
 			} else if signal.Signal == strategy.SignalSell {
-				suggestionText = "💡 这可能是一个卖出机会，但请结合其他技术指标和市场环境进行综合判断"
+				suggestionText = "这可能是一个潜在的卖出机会。请结合其他技术指标和市场情况进行综合分析。"
 			}
 
-			messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 10px; background-color: %s; border-radius: 5px; margin-top: 10px;">
-				<div style="color: %s; font-size: 14px;">%s</div>
-			</div>`, signalBgColor, signalColor, suggestionText))
+			messageBuilder.WriteString(fmt.Sprintf(`<div style="padding: 12px; background: linear-gradient(135deg, %s15, %s08); border: 1px solid %s; border-radius: 6px; margin-top: 12px; position: relative;">
+				<div style="position: absolute; top: -8px; left: 12px; background: white; padding: 0 8px; font-size: 11px; font-weight: 600; color: %s;">操作建议</div>
+				<div style="color: %s; font-size: 13px; line-height: 1.5; margin-top: 3px; font-weight: 500;">%s</div>
+			</div>`, signalColor, signalColor, signalColor, signalColor, signalColor, suggestionText))
 		}
 
 		messageBuilder.WriteString(`</div>`) // 结束内容区域
@@ -511,45 +679,33 @@ func (w *Watcher) createTradingReportNotification(reason string) *notifiers.Noti
 
 	// 如果信号过多，显示提示
 	if len(w.signals) > displayCount {
-		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-top: 20px; text-align: center; padding: 20px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 10px; color: #856404;">
-			<div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">📝 还有更多信号</div>
-			<div>本次报告显示了前 %d 个信号，还有 %d 个信号未显示</div>
-			<div style="font-size: 14px; margin-top: 10px;">完整信号详情请查看系统日志或下次报告</div>
+		messageBuilder.WriteString(fmt.Sprintf(`<div style="margin-top: 15px; text-align: center; padding: 15px; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 6px; color: #856404;">
+			<div style="font-size: 14px; font-weight: 600; margin-bottom: 4px;">📝 还有更多信号</div>
+			<div style="font-size: 13px;">本次报告显示了前 %d 个信号，还有 %d 个信号未显示</div>
+			<div style="font-size: 12px; margin-top: 8px;">完整信号详情请查看系统日志或下次报告</div>
 		</div>`, displayCount, len(w.signals)-displayCount))
 	}
 
 	messageBuilder.WriteString(`</div>`) // 结束信号详情部分
 
-	// 市场提醒和建议
-	messageBuilder.WriteString(`<div style="margin: 25px 0; padding: 20px; background-color: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 5px;">
-		<h4 style="margin: 0 0 10px 0; color: #1976D2;">💡 交易提醒</h4>
-		<ul style="margin: 0; padding-left: 20px; color: #333;">
-			<li>技术指标仅供参考，建议结合基本面分析</li>
-			<li>请合理控制仓位，设置止损止盈</li>
-			<li>关注市场新闻和重大事件影响</li>
-			<li>避免频繁交易，保持冷静理性</li>
-		</ul>
-	</div>`)
-
-	// 免责声明
-	messageBuilder.WriteString(`<div style="margin: 25px 0; padding: 20px; background-color: #fff3cd; border-left: 4px solid #ffc107; border-radius: 5px;">
-		<h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ 重要免责声明</h4>
-		<div style="color: #856404; line-height: 1.6;">
-			<p style="margin: 0 0 10px 0;">• 本报告由技术分析系统自动生成，仅供参考学习</p>
-			<p style="margin: 0 0 10px 0;">• 所有交易信号不构成投资建议或买卖推荐</p>
-			<p style="margin: 0 0 10px 0;">• 数字货币投资存在高风险，可能导致本金损失</p>
-			<p style="margin: 0;">• 请根据个人风险承受能力谨慎决策，独立承担投资风险</p>
+	// 免责声明 - 传统风格
+	messageBuilder.WriteString(`<div style="margin: 25px 0; padding: 20px; background: linear-gradient(135deg, #d9534f15, #c9302c15); border: 1px solid #d9534f; border-radius: 6px; position: relative;">
+		<div style="position: absolute; top: -10px; left: 15px; background: white; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #d9534f;">⚠️ 免责声明</div>
+		<h4 style="margin: 12px 0 12px 0; color: #d63031; font-size: 16px;">📜 重要声明</h4>
+		<div style="color: #666; line-height: 1.6; font-size: 14px;">
+			<p style="margin: 0 0 10px 0;">• 所有交易信号不构成投资建议或推荐</p>
+			<p style="margin: 0 0 10px 0;">• 加密货币投资具有高风险，可能损失全部本金</p>
+			<p style="margin: 0;">• 请根据自身风险承受能力做出决策，并进行独立研究</p>
 		</div>
 	</div>`)
 
-	// 页脚信息
-	messageBuilder.WriteString(`<div style="margin-top: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 5px; text-align: center;">
-		<div style="color: #6c757d; font-size: 14px; margin-bottom: 10px;">
-			🤖 此报告由 <strong>TA Watcher v1.0.0</strong> 自动生成
+	// 页脚信息 - 传统风格简化版
+	messageBuilder.WriteString(`<div style="margin-top: 30px; padding: 20px; background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); border-radius: 6px; text-align: center; color: white;">
+		<div style="font-size: 15px; font-weight: 600; margin-bottom: 6px;">
+			🤖 由 <strong>TA Watcher v1.0</strong> 提供技术支持
 		</div>
-		<div style="color: #6c757d; font-size: 12px;">
-			生成时间: ` + now.Format("2006-01-02 15:04:05") + ` (UTC+8) | 
-			如有技术问题请联系系统管理员
+		<div style="font-size: 12px; opacity: 0.9; margin-bottom: 1px;">
+			报告生成时间：` + now.Format("2006-01-02 15:04:05") + ` (UTC+8)
 		</div>
 	</div>`)
 
@@ -675,7 +831,7 @@ func (w *Watcher) RunSingleCheck(ctx context.Context, symbols []string, timefram
 	// 单次检查结束后，强制发送报告（无论是否有信号）
 	if len(w.signals) > 0 {
 		log.Printf("📧 单次检查发现 %d 个信号，正在发送报告...", len(w.signals))
-		w.sendReport("单次检查完成")
+		w.sendReport("单次检查发现交易信号")
 	} else {
 		log.Printf("📭 单次检查未发现交易信号，发送无信号报告...")
 		w.sendNoSignalReport()
@@ -701,77 +857,264 @@ func (w *Watcher) GetStatus() map[string]interface{} {
 	}
 }
 
-// tryCalculateRatePair 尝试计算汇率对
-func (w *Watcher) tryCalculateRatePair(ctx context.Context, symbol string, timeframe datasource.Timeframe, startTime, endTime time.Time, limit int) ([]*datasource.Kline, error) {
-	// 检查是否是已知的计算汇率对
-	// 目前支持的计算汇率对模式：ADASOL、BTCETH 等
-	if len(symbol) < 6 {
-		return nil, fmt.Errorf("symbol too short for rate calculation: %s", symbol)
-	}
+// collectMultiTimeframeData 收集指定交易对在所有时间框架的数据
+func (w *Watcher) collectMultiTimeframeData(symbol string, signalTimeframe string) map[string]TimeframeData {
+	multiData := make(map[string]TimeframeData)
 
-	// 尝试不同的拆分方式来识别基础币种和报价币种
-	possibleSplits := []struct {
-		base  string
-		quote string
-	}{
-		// 3+3 模式 (如 ADASOL)
-		{symbol[:3], symbol[3:]},
-		// 3+4 模式 (如 BTCUSDT 已经有直接交易对，不应该到这里)
-		{symbol[:3], symbol[3:]},
-		// 4+3 模式 (如 ATOMBTC)
-		{symbol[:4], symbol[4:]},
-	}
+	// 定义要检查的时间框架
+	timeframes := []datasource.Timeframe{datasource.Timeframe1d, datasource.Timeframe1w, datasource.Timeframe1M}
 
-	bridgeCurrency := "USDT" // 使用 USDT 作为桥接货币
-
-	for _, split := range possibleSplits {
-		baseSymbol := split.base
-		quoteSymbol := split.quote
-
-		// 验证基础币种和报价币种是否都是有效的加密货币
-		if w.isValidCryptoSymbol(baseSymbol) && w.isValidCryptoSymbol(quoteSymbol) {
-			log.Printf("💱 尝试计算 %s/%s 汇率，通过 %s 桥接", baseSymbol, quoteSymbol, bridgeCurrency)
-
-			klines, err := w.rateCalculator.CalculateRate(ctx, baseSymbol, quoteSymbol, bridgeCurrency, timeframe, startTime, endTime, limit)
-			if err == nil && len(klines) > 0 {
-				return klines, nil
-			}
-			log.Printf("⚠️ 计算 %s/%s 汇率失败: %v", baseSymbol, quoteSymbol, err)
+	// 计算所有策略需要的最大数据点数（与主逻辑保持一致）
+	maxDataPoints := 50
+	for _, strat := range w.strategies {
+		if required := strat.RequiredDataPoints(); required > maxDataPoints {
+			maxDataPoints = required
 		}
 	}
 
-	return nil, fmt.Errorf("无法计算 %s 的汇率", symbol)
-}
+	// 判断是否为交叉汇率对
+	log.Printf("🔍 开始判断 %s 是否为交叉汇率对...", symbol)
+	isCrossRatePair := w.isCrossRatePair(symbol)
+	log.Printf("📊 %s 判断结果: 交叉汇率对=%t", symbol, isCrossRatePair)
 
-// isValidCryptoSymbol 检查是否是有效的加密货币符号
-func (w *Watcher) isValidCryptoSymbol(symbol string) bool {
-	// 常见的加密货币符号列表
-	validSymbols := map[string]bool{
-		"BTC":   true,
-		"ETH":   true,
-		"BNB":   true,
-		"ADA":   true,
-		"SOL":   true,
-		"DOT":   true,
-		"LINK":  true,
-		"MATIC": true,
-		"AVAX":  true,
-		"ATOM":  true,
-		"XRP":   true,
-		"DOGE":  true,
-		"LTC":   true,
-		"BCH":   true,
-		"UNI":   true,
-		"AAVE":  true,
-		"SUSHI": true,
-		"COMP":  true,
-		"MKR":   true,
-		"YFI":   true,
-		"USDT":  true,
-		"USDC":  true,
-		"BUSD":  true,
-		"DAI":   true,
+	for _, tf := range timeframes {
+		tfStr := string(tf)
+
+		// 时间框架显示名称
+		timeframeDisplay := tfStr
+		switch tfStr {
+		case "1d":
+			timeframeDisplay = "日线"
+		case "1w":
+			timeframeDisplay = "周线"
+		case "1M":
+			timeframeDisplay = "月线"
+		case "4h":
+			timeframeDisplay = "4小时"
+		case "1h":
+			timeframeDisplay = "1小时"
+		}
+
+		// 尝试获取数据并分析（使用与主逻辑相同的方式）
+		ctx := context.Background()
+		endTime := time.Now()
+
+		// 根据时间框架计算正确的开始时间（与主逻辑保持一致）
+		var duration time.Duration
+		switch tf {
+		case datasource.Timeframe1m:
+			duration = time.Duration(maxDataPoints*2) * time.Minute
+		case datasource.Timeframe3m:
+			duration = time.Duration(maxDataPoints*2) * 3 * time.Minute
+		case datasource.Timeframe5m:
+			duration = time.Duration(maxDataPoints*2) * 5 * time.Minute
+		case datasource.Timeframe15m:
+			duration = time.Duration(maxDataPoints*2) * 15 * time.Minute
+		case datasource.Timeframe30m:
+			duration = time.Duration(maxDataPoints*2) * 30 * time.Minute
+		case datasource.Timeframe1h:
+			duration = time.Duration(maxDataPoints*2) * time.Hour
+		case datasource.Timeframe2h:
+			duration = time.Duration(maxDataPoints*2) * 2 * time.Hour
+		case datasource.Timeframe4h:
+			duration = time.Duration(maxDataPoints*2) * 4 * time.Hour
+		case datasource.Timeframe6h:
+			duration = time.Duration(maxDataPoints*2) * 6 * time.Hour
+		case datasource.Timeframe8h:
+			duration = time.Duration(maxDataPoints*2) * 8 * time.Hour
+		case datasource.Timeframe12h:
+			duration = time.Duration(maxDataPoints*2) * 12 * time.Hour
+		case datasource.Timeframe1d:
+			duration = time.Duration(maxDataPoints*2) * 24 * time.Hour
+		case datasource.Timeframe3d:
+			duration = time.Duration(maxDataPoints*2) * 3 * 24 * time.Hour
+		case datasource.Timeframe1w:
+			duration = time.Duration(maxDataPoints*2) * 7 * 24 * time.Hour
+		case datasource.Timeframe1M:
+			duration = time.Duration(maxDataPoints*2) * 30 * 24 * time.Hour
+		default:
+			// 默认按小时计算
+			duration = time.Duration(maxDataPoints*2) * time.Hour
+		}
+
+		startTime := endTime.Add(-duration)
+
+		// 获取K线数据
+		var klines []*datasource.Kline
+		var err error
+
+		if isCrossRatePair {
+			// 交叉汇率对，使用assets包的CalculateRate方法
+			klines, err = w.getCrossRateKlines(ctx, symbol, tf, startTime, endTime, maxDataPoints*2)
+		} else {
+			// 普通交易对，直接获取K线数据
+			klines, err = w.dataSource.GetKlines(ctx, symbol, tf, startTime, endTime, maxDataPoints*2)
+		}
+
+		if err != nil {
+			// 数据获取失败，记录为无数据
+			multiData[tfStr] = TimeframeData{
+				Timeframe:        timeframeDisplay,
+				Indicators:       make(map[string]interface{}),
+				IndicatorSummary: "数据获取失败",
+				DetailedAnalysis: fmt.Sprintf("无法获取K线数据: %v", err),
+				HasSignal:        false,
+				SignalType:       strategy.SignalNone,
+			}
+			continue
+		}
+
+		// 使用与主逻辑相同的数据充足性检查
+		if len(klines) < maxDataPoints {
+			// 数据不足，记录详细信息
+			multiData[tfStr] = TimeframeData{
+				Timeframe:        timeframeDisplay,
+				Indicators:       make(map[string]interface{}),
+				IndicatorSummary: fmt.Sprintf("数据不足 (%d/%d)", len(klines), maxDataPoints),
+				DetailedAnalysis: "K线数据点数不足以进行分析",
+				HasSignal:        false,
+				SignalType:       strategy.SignalNone,
+			}
+			continue
+		}
+
+		// 准备市场数据
+		marketData := &strategy.MarketData{
+			Symbol:    symbol,
+			Timeframe: tf,
+			Klines:    klines,
+			Timestamp: time.Now(),
+		}
+
+		// 分析所有策略
+		var indicators map[string]interface{}
+		var indicatorSummary string
+		var detailedAnalysis string
+		hasSignal := false
+		signalType := strategy.SignalNone
+
+		for _, strat := range w.strategies {
+			result, err := strat.Evaluate(marketData)
+			if err != nil {
+				continue
+			}
+
+			if result != nil {
+				indicators = result.Indicators
+				indicatorSummary = result.IndicatorSummary
+				detailedAnalysis = result.DetailedAnalysis
+
+				// 检查是否有信号
+				if result.ShouldNotify() {
+					hasSignal = true
+					signalType = result.Signal
+				}
+
+				// 通常只有一个策略，所以可以break
+				break
+			}
+		}
+
+		if indicators == nil {
+			indicators = make(map[string]interface{})
+		}
+		if indicatorSummary == "" {
+			indicatorSummary = "正常范围"
+		}
+		if detailedAnalysis == "" {
+			detailedAnalysis = "指标在正常范围内"
+		}
+
+		multiData[tfStr] = TimeframeData{
+			Timeframe:        timeframeDisplay,
+			Indicators:       indicators,
+			IndicatorSummary: indicatorSummary,
+			DetailedAnalysis: detailedAnalysis,
+			HasSignal:        hasSignal,
+			SignalType:       signalType,
+		}
 	}
 
-	return validSymbols[strings.ToUpper(symbol)]
+	return multiData
+}
+
+// isCrossRatePair 判断是否为交叉汇率对
+func (w *Watcher) isCrossRatePair(symbol string) bool {
+	log.Printf("🔍 [%s] 开始判断是否为交叉汇率对", symbol)
+
+	// 首先检查是否包含常见稳定币后缀，如果是则不是交叉汇率对
+	commonQuotes := []string{"USDT", "USD", "BUSD", "USDC", "DAI", "TUSD"}
+	for _, quote := range commonQuotes {
+		if strings.HasSuffix(symbol, quote) {
+			log.Printf("✅ [%s] 包含稳定币后缀 %s，判定为直接交易对", symbol, quote)
+			return false
+		}
+	}
+
+	// 对于其他交易对，尝试直接获取少量数据来判断是否为真实交易对
+	log.Printf("🔍 [%s] 不包含稳定币后缀，尝试获取数据验证", symbol)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // 增加到30秒
+	defer cancel()
+
+	// 尝试获取最近1小时的1个数据点来验证交易对是否存在
+	endTime := time.Now()
+	startTime := endTime.Add(-time.Hour)
+
+	_, err := w.dataSource.GetKlines(ctx, symbol, datasource.Timeframe1h, startTime, endTime, 1)
+	if err != nil {
+		// 如果直接获取失败，则认为是交叉汇率对，需要通过计算获得
+		log.Printf("🔍 [%s] 直接获取失败，判定为交叉汇率对: %v", symbol, err)
+		return true
+	}
+
+	// 如果能直接获取数据，则是直接交易对，不需要计算
+	log.Printf("✅ [%s] 直接获取成功，判定为直接交易对", symbol)
+	return false
+}
+
+// getCrossRateKlines 获取交叉汇率对的K线数据
+func (w *Watcher) getCrossRateKlines(ctx context.Context, symbol string, timeframe datasource.Timeframe, startTime, endTime time.Time, limit int) ([]*datasource.Kline, error) {
+	// 解析交叉汇率对的基础货币和报价货币
+	baseSymbol, quoteSymbol, err := w.parseCrossRatePair(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("解析交叉汇率对失败: %w", err)
+	}
+
+	// 使用USDT作为桥接货币
+	bridgeCurrency := "USDT"
+
+	// 调用assets包的CalculateRate方法
+	return w.rateCalculator.CalculateRate(ctx, baseSymbol, quoteSymbol, bridgeCurrency, timeframe, startTime, endTime, limit)
+}
+
+// parseCrossRatePair 解析交叉汇率对，返回基础货币和报价货币
+func (w *Watcher) parseCrossRatePair(symbol string) (baseSymbol, quoteSymbol string, err error) {
+	// 常见的加密货币符号，按市值排序（作为可能的分割点）
+	knownSymbols := []string{"BTC", "ETH", "BNB", "ADA", "SOL", "DOT", "MATIC", "AVAX", "LINK", "UNI"}
+
+	// 尝试从后往前匹配已知符号作为报价货币
+	for _, quote := range knownSymbols {
+		if strings.HasSuffix(symbol, quote) && len(symbol) > len(quote) {
+			baseSymbol = symbol[:len(symbol)-len(quote)]
+			quoteSymbol = quote
+
+			// 验证基础货币也是已知符号
+			for _, base := range knownSymbols {
+				if baseSymbol == base {
+					return baseSymbol, quoteSymbol, nil
+				}
+			}
+		}
+	}
+
+	// 如果无法解析，尝试常见的3-3或4-3分割
+	if len(symbol) == 6 {
+		// 3-3分割，如ETHBTC
+		return symbol[:3], symbol[3:], nil
+	} else if len(symbol) == 7 {
+		// 可能是4-3分割，如LINKBTC
+		return symbol[:4], symbol[4:], nil
+	}
+
+	return "", "", fmt.Errorf("无法解析交叉汇率对: %s", symbol)
 }

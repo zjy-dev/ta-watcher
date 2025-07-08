@@ -22,6 +22,26 @@ func TestConfigIntegration(t *testing.T) {
 
 	// 创建测试配置
 	testConfig := &Config{
+		DataSource: DataSourceConfig{
+			Primary:    "coinbase",
+			Fallback:   "binance",
+			Timeout:    30 * time.Second,
+			MaxRetries: 3,
+			Binance: BinanceConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 1200,
+					RetryDelay:        2 * time.Second,
+					MaxRetries:        3,
+				},
+			},
+			Coinbase: CoinbaseConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        15 * time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: BinanceConfig{
 			RateLimit: RateLimitConfig{
 				RequestsPerMinute: 100,
@@ -91,8 +111,13 @@ func TestConfigIntegration(t *testing.T) {
 	})
 
 	t.Run("ValidateConfig", func(t *testing.T) {
+		// 先保存配置到临时文件
+		tempConfigPath := filepath.Join(tempDir, "validate_test_config.yaml")
+		err := SaveConfig(testConfig, tempConfigPath)
+		require.NoError(t, err, "保存测试配置应该成功")
+
 		// 加载配置
-		loadedConfig, err := LoadConfig(configPath)
+		loadedConfig, err := LoadConfig(tempConfigPath)
 		require.NoError(t, err)
 
 		// 验证配置
@@ -101,8 +126,11 @@ func TestConfigIntegration(t *testing.T) {
 	})
 
 	t.Run("InvalidConfigValidation", func(t *testing.T) {
-		// 创建无效配置
+		// 创建无效配置 - 缺少必需的 DataSource 配置
 		invalidConfig := &Config{
+			DataSource: DataSourceConfig{
+				Primary: "", // 无效值 - primary不能为空
+			},
 			Binance: BinanceConfig{
 				RateLimit: RateLimitConfig{
 					RequestsPerMinute: -1, // 无效值
@@ -182,6 +210,26 @@ func TestConfigConcurrency(t *testing.T) {
 
 	// 创建基础配置
 	baseConfig := &Config{
+		DataSource: DataSourceConfig{
+			Primary:    "coinbase",
+			Fallback:   "binance",
+			Timeout:    30 * time.Second,
+			MaxRetries: 3,
+			Binance: BinanceConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 1200,
+					RetryDelay:        2 * time.Second,
+					MaxRetries:        3,
+				},
+			},
+			Coinbase: CoinbaseConfig{
+				RateLimit: RateLimitConfig{
+					RequestsPerMinute: 100,
+					RetryDelay:        15 * time.Second,
+					MaxRetries:        3,
+				},
+			},
+		},
 		Binance: BinanceConfig{
 			RateLimit: RateLimitConfig{
 				RequestsPerMinute: 100,
@@ -269,6 +317,21 @@ func TestConfigBackwardCompatibility(t *testing.T) {
 
 	// 模拟旧版本配置文件（缺少某些新字段）
 	oldConfigYAML := `
+datasource:
+  primary: "coinbase"
+  timeout: "30s"
+  max_retries: 3
+  binance:
+    rate_limit:
+      requests_per_minute: 1200
+      retry_delay: "2s"
+      max_retries: 3
+  coinbase:
+    rate_limit:
+      requests_per_minute: 100
+      retry_delay: "15s" 
+      max_retries: 3
+
 binance:
   rate_limit:
     requests_per_minute: 1000
@@ -289,6 +352,12 @@ notifiers:
       tls: true
     from: "old@test.com"
     to: ["recipient@test.com"]
+
+assets:
+  symbols: ["BTC", "ETH"]
+  timeframes: ["1d"]
+  base_currency: "USDT"
+  market_cap_update_interval: "1h"
 `
 
 	oldConfigPath := filepath.Join(tempDir, "old_config.yaml")
@@ -303,9 +372,11 @@ notifiers:
 		// 验证基本字段存在
 		assert.Equal(t, "smtp.old.com", config.Notifiers.Email.SMTP.Host)
 		assert.Equal(t, "info", config.Watcher.LogLevel)
+		assert.Equal(t, "coinbase", config.DataSource.Primary)
 
 		// 验证缺失字段有默认值
 		assert.Greater(t, config.Watcher.Interval, time.Duration(0), "应该有默认检查间隔值")
 		assert.Greater(t, config.Binance.RateLimit.RequestsPerMinute, 0, "应该有限流配置")
+		assert.Greater(t, config.DataSource.Binance.RateLimit.RequestsPerMinute, 0, "DataSource应该有限流配置")
 	})
 }

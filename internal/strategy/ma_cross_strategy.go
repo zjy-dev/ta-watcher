@@ -184,40 +184,40 @@ func (s *MACrossStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// 黄金交叉：快线上穿慢线，买入信号
 		result.Signal = SignalBuy
 		result.Message = "🟢 黄金交叉信号"
-		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 上穿慢线 %.2f，形成黄金交叉。这通常预示着上升趋势的开始，建议考虑买入。当前价格差异为 %.2f%%。",
+		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 上穿慢线 %.2f，形成黄金交叉。<br/>这通常预示着上升趋势的开始，建议考虑买入。<br/>当前价格差异为 %.2f%%。",
 			fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 
 		// 判断信号强度
 		diffPercent := (currentDiff / slowCurrent) * 100
 		if diffPercent > 2.0 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 价格差异较大，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 价格差异较大，信号强度: 强"
 		} else if diffPercent > 1.0 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 价格差异适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 价格差异适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 价格差异较小，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 价格差异较小，信号强度: 弱"
 		}
 
 	} else if previousDiff >= 0 && currentDiff < 0 {
 		// 死亡交叉：快线下穿慢线，卖出信号
 		result.Signal = SignalSell
 		result.Message = "🔴 死亡交叉信号"
-		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 下穿慢线 %.2f，形成死亡交叉。这通常预示着下降趋势的开始，建议考虑卖出。当前价格差异为 %.2f%%。",
+		result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 下穿慢线 %.2f，形成死亡交叉。<br/>这通常预示着下降趋势的开始，建议考虑卖出。<br/>当前价格差异为 %.2f%%。",
 			fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 
 		// 判断信号强度
 		diffPercent := (currentDiff / slowCurrent) * 100
 		if diffPercent < -2.0 {
 			result.Strength = StrengthStrong
-			result.DetailedAnalysis += " 📈 价格差异较大，信号强度: 强"
+			result.DetailedAnalysis += "<br/>📈 价格差异较大，信号强度: 强"
 		} else if diffPercent < -1.0 {
 			result.Strength = StrengthNormal
-			result.DetailedAnalysis += " 📊 价格差异适中，信号强度: 中等"
+			result.DetailedAnalysis += "<br/>📊 价格差异适中，信号强度: 中等"
 		} else {
 			result.Strength = StrengthWeak
-			result.DetailedAnalysis += " 📉 价格差异较小，信号强度: 弱"
+			result.DetailedAnalysis += "<br/>📉 价格差异较小，信号强度: 弱"
 		}
 
 	} else {
@@ -225,10 +225,10 @@ func (s *MACrossStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		result.Signal = SignalNone
 		result.Message = "⚪ 无交叉信号"
 		if currentDiff > 0 {
-			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之上，但未发生交叉。当前处于多头排列，价格差异为 %.2f%%。",
+			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之上，但未发生交叉。<br/>当前处于多头排列，价格差异为 %.2f%%。",
 				fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 		} else {
-			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之下，但未发生交叉。当前处于空头排列，价格差异为 %.2f%%。",
+			result.DetailedAnalysis = fmt.Sprintf("快线 %.2f 位于慢线 %.2f 之下，但未发生交叉。<br/>当前处于空头排列，价格差异为 %.2f%%。",
 				fastCurrent, slowCurrent, (currentDiff/slowCurrent)*100)
 		}
 	}
@@ -245,11 +245,11 @@ func (s *MACrossStrategy) Evaluate(data *MarketData) (*StrategyResult, error) {
 		// 添加趋势描述
 		trendDesc := ""
 		if fastTrend > 0 && slowTrend > 0 {
-			trendDesc = " 📈 双线均呈上升趋势"
+			trendDesc = "<br/>📈 双线均呈上升趋势"
 		} else if fastTrend < 0 && slowTrend < 0 {
-			trendDesc = " 📉 双线均呈下降趋势"
+			trendDesc = "<br/>📉 双线均呈下降趋势"
 		} else {
-			trendDesc = " ➡️ 趋势方向分歧"
+			trendDesc = "<br/>➡️ 趋势方向分歧"
 		}
 		result.DetailedAnalysis += trendDesc
 	}

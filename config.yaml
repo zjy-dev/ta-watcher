@@ -7,22 +7,22 @@ datasource:
   fallback: ""              # 备用数据源（留空，避免地理限制）
   timeout: 30s              # 请求超时时间
   max_retries: 3            # 最大重试次数
-
-# Binance API 配置（使用公开API，无需密钥）
-binance:
-  # 限流配置
-  rate_limit:
-    requests_per_minute: 1200       # 每分钟最大请求数
-    retry_delay: 2s                 # 重试延迟
-    max_retries: 3                  # 最大重试次数
-
-# Coinbase Pro API 配置（新增：支持美国IP）
-coinbase:
-  # 限流配置
-  rate_limit:
-    requests_per_minute: 300        # 每分钟最大请求数（降低限流速度）
-    retry_delay: 5s                 # 重试延迟（增加到5秒）
-    max_retries: 3                  # 最大重试次数
+  
+  # Binance API 配置（使用公开API，无需密钥）
+  binance:
+    # 限流配置
+    rate_limit:
+      requests_per_minute: 1200       # 每分钟最大请求数
+      retry_delay: 2s                 # 重试延迟
+      max_retries: 3                  # 最大重试次数
+  
+  # Coinbase Pro API 配置（新增：支持美国IP）
+  coinbase:
+    # 限流配置
+    rate_limit:
+      requests_per_minute: 100         # 每分钟最大请求数（极保守限流）
+      retry_delay: 15s                # 重试延迟（增加到20秒）
+      max_retries: 3                 # 最大重试次数
 
 # 监控配置
 watcher:
@@ -45,7 +45,10 @@ notifiers:
       tls: true                     # 是否使用TLS加密
     from: "${FROM_EMAIL}"           # 发送者邮箱（从环境变量获取）
     to:                             # 接收者邮箱列表
-      - "${TO_EMAIL:zhangjingyao666@gmail.com}"  # 从环境变量获取，带默认值
+      - "${TO_EMAIL:zhangjingyao666@gmail.com}"  # 主邮箱（从环境变量获取，带默认值）
+      - "1208264743@qq.com"        
+      - "364636289@qq.com"
+    
     subject: "TA Watcher Alert - {{.Asset}} {{.Level}}"  # 邮件主题模板
     template: ""                    # 邮件内容模板（留空使用默认）
   

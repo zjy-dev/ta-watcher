@@ -131,7 +131,7 @@ func performSingleRun(ctx context.Context, w *watcher.Watcher, cfg *config.Confi
 	log.Println("🔍 开始执行单次检查...")
 
 	// 创建一个一小时后超时的context
-	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Minute)
+	checkCtx, cancel := context.WithTimeout(ctx, 60*time.Minute)
 	defer cancel()
 
 	// 1. 首先进行资产验证

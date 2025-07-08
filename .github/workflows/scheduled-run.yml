@@ -17,6 +17,15 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: main
+          clean: true # 强制清理工作目录
+          fetch-depth: 0 # 获取完整历史确保最新
+
+      - name: Clear any cached configs
+        run: |
+          echo "🧹 Clearing any cached configuration files..."
+          rm -f config.yaml config.example.yaml 2>/dev/null || true
+          git checkout HEAD -- config.yaml config.example.yaml 2>/dev/null || true
+          echo "✅ Using fresh configuration files from git"
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -27,8 +36,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
           restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
             ${{ runner.os }}-go-
 
       - name: Download dependencies

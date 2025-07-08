@@ -41,8 +41,6 @@ jobs:
           ls -la config*.yaml || echo "No config files found"
           echo "📄 config.yaml content (first 10 lines):"
           head -10 config.yaml || echo "config.yaml not found"
-          echo "📄 config.example.yaml content (first 10 lines):"
-          head -10 config.example.yaml || echo "config.example.yaml not found"
 
       - name: Set up Go
         uses: actions/setup-go@v4
@@ -156,7 +154,7 @@ jobs:
 
           # Test health check
           echo -e "\n🔍 Testing Health Check..."
-          ./bin/ta-watcher -health -config config.example.yaml
+          ./bin/ta-watcher -health -config config.yaml
 
           # Test version
           echo -e "\n📋 Testing Version..."
@@ -164,7 +162,7 @@ jobs:
 
           # Check config file validity
           echo -e "\n⚙️  Validating Configuration File..."
-          if ./bin/ta-watcher -health -config config.example.yaml; then
+          if ./bin/ta-watcher -health -config config.yaml; then
             echo "✅ Configuration file is valid"
           else
             echo "❌ Configuration file has issues"

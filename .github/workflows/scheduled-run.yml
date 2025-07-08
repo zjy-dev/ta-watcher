@@ -2,8 +2,8 @@ name: TA Watcher Scheduled Run
 
 on:
   schedule:
-    # 每六小时运行一次：UTC时间1:42、7:42、13:42、19:42（对应北京时间9:42、15:42、21:42、3:42）
-    - cron: "42 1,7,13,19 * * *"
+    # 每六小时运行一次：北京时间1:42、7:42、13:42、19:42（对应UTC时间17:42、23:42、5:42、11:42）
+    - cron: "42 17,23,5,11 * * *"
 
   # Allow manual trigger for testing (but not immediate after push)
   workflow_dispatch:
@@ -82,8 +82,8 @@ jobs:
         run: |
           echo "⏰ Starting TA Watcher scheduled run at $(date)"
           echo "🌍 Beijing Time: $(TZ=Asia/Shanghai date)"
-          echo "⏱️  Run schedule: Every 6 hours at UTC 1:42, 7:42, 13:42, 19:42"
-          echo "🕘 Beijing Time: 9:42, 15:42, 21:42, 3:42"
+          echo "⏱️  Run schedule: Every 6 hours at Beijing Time 1:42, 7:42, 13:42, 19:42"
+          echo "🕘 UTC Time: 17:42, 23:42, 5:42, 11:42"
 
           # Check if secrets are available
           if [ -z "$SMTP_HOST" ] || [ -z "$SMTP_USERNAME" ] || [ -z "$SMTP_PASSWORD" ] || [ -z "$FROM_EMAIL" ] || [ -z "$TO_EMAIL" ]; then

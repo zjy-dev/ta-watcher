@@ -70,6 +70,7 @@ assets:
     # - "BNB"                         # 币安币
     - "ADA"                         # 卡尔达诺
     - "SOL"                         # Solana
+    - "UNI"
   timeframes:                       # 监控的时间框架
     - "1d"                          # 小时线（测试用）
     - "1w"                          # 4小时线

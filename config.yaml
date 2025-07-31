@@ -75,7 +75,7 @@ assets:
     - "1d"                          # 小时线（测试用）
     - "1w"                          # 4小时线
     - "1M"                          # 日线
-  base_currency: "USDT"             # 基准货币
+  base_currency: "USD"             # 基准货币
   market_cap_update_interval: 1h    # 市值数据更新间隔
 
 # 注意：策略现在完全由 Go 代码定义，不再需要配置文件设置

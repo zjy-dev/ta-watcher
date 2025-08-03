@@ -1081,7 +1081,7 @@ func (w *Watcher) getCrossRateKlines(ctx context.Context, symbol string, timefra
 	}
 
 	// 使用USDT作为桥接货币
-	bridgeCurrency := "USDT"
+	bridgeCurrency := "USD"
 
 	// 调用assets包的CalculateRate方法
 	return w.rateCalculator.CalculateRate(ctx, baseSymbol, quoteSymbol, bridgeCurrency, timeframe, startTime, endTime, limit)
